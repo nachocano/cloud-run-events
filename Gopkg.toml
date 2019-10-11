@@ -60,9 +60,10 @@ required = [
   revision = "dbd2aec45641ad6a8f9834242f6ae5616cdb7bb1"
   source = "github.com/n3wscott/manifestival"
 
+# This is a preemptive override.
 [[override]]
   name = "github.com/cloudevents/sdk-go"
-  version = "0.9.2"
+  branch = "master"
 
 [prune]
   go-tests = true

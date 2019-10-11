@@ -28,7 +28,7 @@ import (
 func convertPubsub(ctx context.Context, msg *cepubsub.Message, sendMode ModeType) (*cloudevents.Event, error) {
 	tx := pubsubcontext.TransportContextFrom(ctx)
 	// Make a new event and convert the message payload.
-	event := cloudevents.NewEvent(cloudevents.VersionV03)
+	event := cloudevents.NewEvent(cloudevents.VersionV1)
 	event.SetID(tx.ID)
 	event.SetTime(tx.PublishTime)
 	event.SetSource(v1alpha1.PubSubEventSource(tx.Project, tx.Topic))
@@ -37,7 +37,7 @@ func convertPubsub(ctx context.Context, msg *cepubsub.Message, sendMode ModeType
 	// Set the schema if it comes as an attribute.
 	if val, ok := msg.Attributes["schema"]; ok {
 		delete(msg.Attributes, "schema")
-		event.SetSchemaURL(val)
+		event.SetDataSchema(val)
 	}
 	// Set the mode to be an extension attribute.
 	event.SetExtension("knativecemode", sendMode)
