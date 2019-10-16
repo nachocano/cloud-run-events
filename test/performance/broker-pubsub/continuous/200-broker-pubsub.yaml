@@ -42,11 +42,10 @@ spec:
             - name: sender-receiver
               image: knative.dev/eventing/test/test_images/performance
               args:
-                - "--role=sender-receiver"
+                - "--roles=sender,receiver"
                 - "--sink=http://pubsub-broker"
                 - "--aggregator=broker-pubsub-aggregator:10000"
                 - "--pace=100:10,400:20,800:30,1000:60,2000:60,3000:60"
-                - "--verbose"
               env:
                 - name: POD_NAME
                   valueFrom:
@@ -96,11 +95,10 @@ spec:
             - name: aggregator
               image: knative.dev/eventing/test/test_images/performance
               args:
-                - "--role=aggregator"
+                - "--roles=aggregator"
                 # set to the number of sender-receiver
-                - "--expect-records=1"
+                - "--expect-records=2"
                 - "--mako-tags=channel=pubsub"
-                - "--verbose"
                 - "--benchmark-key=5903682180743168"
                 - "--benchmark-name=Development - Broker Latency & Throughput"
               ports:
