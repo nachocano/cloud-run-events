@@ -130,4 +130,4 @@ spec:
                 name: config-mako
             - name: service-account
               secret:
-                secretName: knative-gcp-mako
+                secretName: mako
