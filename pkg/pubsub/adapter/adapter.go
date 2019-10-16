@@ -33,6 +33,12 @@ import (
 	"knative.dev/pkg/logging"
 )
 
+// TODO set them as env variables or a config map.
+const (
+	defaultMaxIdleConnections        = 1000
+	defaultMaxIdleConnectionsPerHost = 100
+)
+
 // Adapter implements the Pub/Sub adapter to deliver Pub/Sub messages from a
 // pre-existing topic/subscription to a Sink.
 type Adapter struct {
@@ -229,6 +235,8 @@ func (a *Adapter) newPubSubClient(ctx context.Context) (cloudevents.Client, erro
 func (a *Adapter) newHTTPClient(ctx context.Context, target string) (cloudevents.Client, error) {
 	tOpts := []http.Option{
 		cloudevents.WithTarget(target),
+		cloudevents.WithMaxIdleConns(defaultMaxIdleConnections),
+		cloudevents.WithMaxIdleConnsPerHost(defaultMaxIdleConnectionsPerHost),
 	}
 
 	switch a.SendMode {
