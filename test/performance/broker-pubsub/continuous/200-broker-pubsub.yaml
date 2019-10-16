@@ -45,7 +45,7 @@ spec:
                 - "--roles=sender,receiver"
                 - "--sink=http://pubsub-broker"
                 - "--aggregator=broker-pubsub-aggregator:10000"
-                - "--pace=100:10,400:20,800:30,1000:60,2000:60,3000:60"
+                - "--pace=100:10,200:20,400:30,800:40,1000:60"
               env:
                 - name: POD_NAME
                   valueFrom:
@@ -130,4 +130,4 @@ spec:
                 name: config-mako
             - name: service-account
               secret:
-                secretName: service-account
+                secretName: knative-gcp-mako
