@@ -227,11 +227,7 @@ func (a *Adapter) newPubSubClient(ctx context.Context) (cloudevents.Client, erro
 }
 
 func (a *Adapter) newHTTPClient(ctx context.Context, target string) (cloudevents.Client, error) {
-	tOpts := []http.Option{
-		cloudevents.WithTarget(target),
-		cloudevents.WithMaxIdleConns(kncloudevents.DefaultMaxIdleConnections),
-		cloudevents.WithMaxIdleConnsPerHost(kncloudevents.DefaultMaxIdleConnectionsPerHost),
-	}
+	tOpts := []http.Option{cloudevents.WithTarget(target)}
 
 	switch a.SendMode {
 	case converters.Binary, converters.Push:

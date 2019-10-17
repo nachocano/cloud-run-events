@@ -37,7 +37,7 @@ spec:
               - "--roles=sender,receiver"
               - "--sink=http://pubsub-broker"
               - "--aggregator=broker-pubsub-aggregator:10000"
-              - "--pace=100:10,200:20,400:30,800:40,1000:60"
+              - "--pace=1000:120"
             env:
               - name: GOGC
                 value: "off"
@@ -59,7 +59,7 @@ spec:
 
 ---
 
-apiVersion: batch/v1
+apiVersion: v1
 kind: Pod
 metadata:
   name: broker-pubsub-aggregator
@@ -74,7 +74,7 @@ spec:
         image: knative.dev/eventing/test/test_images/performance
         args:
           - "--roles=aggregator"
-          # set to the number of sender-receiver
+          # set to the number of sender + receiver (same image that does both counts 2)
           - "--expect-records=2"
           - "--mako-tags=channel=pubsub"
           - "--benchmark-key=5903682180743168"

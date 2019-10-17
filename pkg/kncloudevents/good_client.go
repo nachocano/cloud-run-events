@@ -12,11 +12,7 @@ const (
 )
 
 func NewDefaultClient(target ...string) (cloudevents.Client, error) {
-	tOpts := []http.Option{
-		cloudevents.WithBinaryEncoding(),
-		cloudevents.WithMaxIdleConns(DefaultMaxIdleConnections),
-		cloudevents.WithMaxIdleConnsPerHost(DefaultMaxIdleConnectionsPerHost),
-	}
+	tOpts := []http.Option{cloudevents.WithBinaryEncoding()}
 	if len(target) > 0 && target[0] != "" {
 		tOpts = append(tOpts, cloudevents.WithTarget(target[0]))
 	}
