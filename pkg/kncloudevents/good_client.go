@@ -1,15 +1,16 @@
 package kncloudevents
 
 import (
-	cloudevents "github.com/cloudevents/sdk-go"
+	nethttp "net/http"
+
+	"github.com/cloudevents/sdk-go"
 	"github.com/cloudevents/sdk-go/pkg/cloudevents/transport/http"
 )
 
-// TODO set them as env variables or a config map.
-const (
-	DefaultMaxIdleConnections        = 1000
-	DefaultMaxIdleConnectionsPerHost = 100
-)
+type ConnectionArgs struct {
+	MaxIdleConns        int
+	MaxIdleConnsPerHost int
+}
 
 func NewDefaultClient(target ...string) (cloudevents.Client, error) {
 	tOpts := []http.Option{cloudevents.WithBinaryEncoding()}
@@ -21,6 +22,23 @@ func NewDefaultClient(target ...string) (cloudevents.Client, error) {
 	t, err := cloudevents.NewHTTPTransport(tOpts...)
 	if err != nil {
 		return nil, err
+	}
+	return NewDefaultClientGivenHttpTransport(t)
+}
+
+// NewDefaultClientGivenHttpTransport creates a new CloudEvents client using the provided cloudevents HTTP
+// transport. Note that it does modify the provided cloudevents HTTP Transport by different connnection options
+// to its Client, in case they are specified.
+func NewDefaultClientGivenHttpTransport(t *cloudevents.HTTPTransport, connectionArgs ...ConnectionArgs) (cloudevents.Client, error) {
+	// Add connection options to the underlying transport.
+	var transport = nethttp.DefaultTransport
+	if len(connectionArgs) > 0 {
+		httpTransport := transport.(*nethttp.Transport)
+		httpTransport.MaxIdleConns = connectionArgs[0].MaxIdleConns
+		httpTransport.MaxIdleConnsPerHost = connectionArgs[0].MaxIdleConnsPerHost
+	}
+	t.Client = &nethttp.Client{
+		Transport: transport,
 	}
 
 	// Use the transport to make a new CloudEvents client.
