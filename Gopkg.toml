@@ -62,8 +62,7 @@ required = [
 
 [[override]]
   name = "github.com/cloudevents/sdk-go"
-  source = "github.com/nachocano/sdk-go"
-  branch = "http_client"
+  branch = "master"
 
 [prune]
   go-tests = true
