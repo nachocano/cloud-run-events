@@ -89,9 +89,6 @@ type TableRow struct {
 	// For cluster-scoped resources like ClusterIngress, it does not have to be
 	// in the same namespace with its child resources.
 	SkipNamespaceValidation bool
-
-	// PostConditions allows custom assertions to be made after reconciliation
-	PostConditions []func(*testing.T, *TableRow)
 }
 
 func objKey(o runtime.Object) string {
@@ -333,10 +330,6 @@ func (r *TableRow) Test(t *testing.T, factory Factory) {
 	gotStats := statsReporter.GetServiceReadyStats()
 	if diff := cmp.Diff(r.WantServiceReadyStats, gotStats); diff != "" {
 		t.Errorf("Unexpected service ready stats (-want, +got): %s", diff)
-	}
-
-	for _, verify := range r.PostConditions {
-		verify(t, r)
 	}
 }
 

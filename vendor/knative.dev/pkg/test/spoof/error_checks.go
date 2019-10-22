@@ -40,14 +40,13 @@ func isDNSError(err error) bool {
 	return strings.Contains(msg, "no such host") || strings.Contains(msg, ":53")
 }
 
-func isConnectionRefused(err error) bool {
+func isTCPConnectRefuse(err error) bool {
 	// The alternative for the string check is:
 	// 	errNo := (((err.(*url.Error)).Err.(*net.OpError)).Err.(*os.SyscallError).Err).(syscall.Errno)
 	// if errNo == syscall.Errno(0x6f) {...}
 	// But with assertions, of course.
-	return err != nil && strings.Contains(err.Error(), "connect: connection refused")
-}
-
-func isConnectionReset(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "connection reset by peer")
+	if err != nil && strings.Contains(err.Error(), "connect: connection refused") {
+		return true
+	}
+	return false
 }

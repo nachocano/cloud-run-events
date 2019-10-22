@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"sync"
@@ -124,20 +125,20 @@ func NewDurableConnection(target string, messageChan chan []byte, logger *zap.Su
 		for {
 			select {
 			default:
-				logger.Infof("Connecting to %s", target)
+				logger.Infof("Connecting to %q", target)
 				if err := c.connect(); err != nil {
-					logger.With(zap.Error(err)).Errorf("Connecting to %s failed", target)
+					logger.Errorw(fmt.Sprintf("Connecting to %q failed", target), zap.Error(err))
 					continue
 				}
-				logger.Debugf("Connected to %s", target)
+				logger.Infof("Connected to %q", target)
 				if err := c.keepalive(); err != nil {
-					logger.With(zap.Error(err)).Errorf("Connection to %s broke down, reconnecting...", target)
+					logger.Errorw(fmt.Sprintf("Connection to %q broke down, reconnecting...", target), zap.Error(err))
 				}
 				if err := c.closeConnection(); err != nil {
 					logger.Errorw("Failed to close the connection after crashing", zap.Error(err))
 				}
 			case <-c.closeChan:
-				logger.Infof("Connection to %s is being shutdown", target)
+				logger.Infof("Connection to %q is being shutdown", target)
 				return
 			}
 		}
@@ -184,10 +185,12 @@ func newConnection(connFactory func() (rawConnection, error), messageChan chan [
 
 // connect tries to establish a websocket connection.
 func (c *ManagedConnection) connect() error {
-	return wait.ExponentialBackoff(c.connectionBackoff, func() (bool, error) {
+	var err error
+	wait.ExponentialBackoff(c.connectionBackoff, func() (bool, error) {
 		select {
 		default:
-			conn, err := c.connectionFactory()
+			var conn rawConnection
+			conn, err = c.connectionFactory()
 			if err != nil {
 				return false, nil
 			}
@@ -208,9 +211,12 @@ func (c *ManagedConnection) connect() error {
 			c.connection = conn
 			return true, nil
 		case <-c.closeChan:
-			return false, errShuttingDown
+			err = errShuttingDown
+			return false, err
 		}
 	})
+
+	return err
 }
 
 // keepalive keeps the connection open.

@@ -20,7 +20,6 @@ package zipkin
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"sync"
@@ -135,29 +134,26 @@ func JSONTrace(traceID string, expected int, timeout time.Duration) (trace []mod
 	for len(trace) != expected {
 		select {
 		case <-t:
-			return trace, &TimeoutError{
-				lastErr: err,
-			}
+			return trace, &TimeoutError{}
 		default:
 			trace, err = jsonTrace(traceID)
+			if err != nil {
+				return trace, err
+			}
 		}
 	}
-	return trace, err
+	return trace, nil
 }
 
 // TimeoutError is an error returned by JSONTrace if it times out before getting the expected number
 // of traces.
-type TimeoutError struct{
-	lastErr error
+type TimeoutError struct{}
+
+func (*TimeoutError) Error() string {
+	return "timeout getting JSONTrace"
 }
 
-func (t *TimeoutError) Error() string {
-	return fmt.Sprintf("timeout getting JSONTrace, most recent error: %v", t.lastErr)
-}
-
-// jsonTrace gets a trace from Zipkin and returns it. Errors returned from this function should be
-// retried, as they are likely caused by random problems communicating with Zipkin, or Zipkin
-// communicating with its data store.
+// jsonTrace gets a trace from Zipkin and returns it.
 func jsonTrace(traceID string) ([]model.SpanModel, error) {
 	var empty []model.SpanModel
 
@@ -175,7 +171,7 @@ func jsonTrace(traceID string) ([]model.SpanModel, error) {
 	var models []model.SpanModel
 	err = json.Unmarshal(body, &models)
 	if err != nil {
-		return empty, fmt.Errorf("got an error in unmarshalling JSON %q: %v", body, err)
+		return empty, err
 	}
 	return models, nil
 }
