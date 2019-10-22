@@ -104,8 +104,7 @@
   version = "v0.2.1"
 
 [[projects]]
-  branch = "master"
-  digest = "1:06eead27c36673ea60316d32e66dca0b18963734828dcc0a256e0984e5db8d77"
+  digest = "1:fb24112bc1feb181830ac075229cf6da2d80608bbe75ce5bd9c15f3e7fedc203"
   name = "github.com/cloudevents/sdk-go"
   packages = [
     ".",
@@ -125,7 +124,8 @@
     "pkg/cloudevents/types",
   ]
   pruneopts = "NUT"
-  revision = "b0ed3376c113528ca45911a44eac70307912b318"
+  revision = "2fa4bb1fbb4aac4d906b0173a2a408f701439b82"
+  version = "v0.10.0"
 
 [[projects]]
   digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
@@ -1158,11 +1158,11 @@
   name = "knative.dev/eventing"
   packages = ["pkg/apis/duck/v1alpha1"]
   pruneopts = "NUT"
-  revision = "2672200d9082f4926dbdd0ec1b09c52d6bbe24f8"
+  revision = "3f243b58834839857efd55ab0ed2e7593264b569"
 
 [[projects]]
   branch = "master"
-  digest = "1:9cbababf809526beba72d5c43e877708afc1f200a697b54dc18507c370f20ea8"
+  digest = "1:2a1af5e20affdf0508f4296328c812f1448bff1c5d7a8d74a2a8a56b5913ff72"
   name = "knative.dev/pkg"
   packages = [
     "apis",
@@ -1230,7 +1230,7 @@
     "webhook",
   ]
   pruneopts = "T"
-  revision = "757d7e4c7706e3fc60d72627e8a7250e909a137e"
+  revision = "849fcc967b598b47945067cfe0536377bac6bd19"
 
 [[projects]]
   branch = "master"
