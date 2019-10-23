@@ -17,11 +17,9 @@ limitations under the License.
 package main
 
 import (
+	"cloud.google.com/go/compute/metadata"
 	"flag"
 	"fmt"
-	"log"
-
-	"cloud.google.com/go/compute/metadata"
 	"github.com/google/knative-gcp/pkg/pubsub/adapter"
 	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap"
@@ -85,9 +83,9 @@ func mainMetrics(logger *zap.SugaredLogger, opts *metrics.ExporterOptions) {
 		return
 	}
 
-	if err := metrics.UpdateExporter(*opts, logger); err != nil {
-		log.Fatalf("Failed to create the metrics exporter: %v", err)
-	}
+	//if err := metrics.UpdateExporter(*opts, logger); err != nil {
+	//	log.Fatalf("Failed to create the metrics exporter: %v", err)
+	//}
 
 	// TODO metrics are API surface, so make sure we need to expose this before doing so.
 	//  These seem to be private ones and more profiling related ones.
