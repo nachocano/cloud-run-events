@@ -33,8 +33,8 @@ import (
 	"github.com/google/knative-gcp/pkg/reconciler"
 	"github.com/google/knative-gcp/pkg/reconciler/pubsub"
 
-	deploymentinformer "knative.dev/pkg/client/injection/kube/informers/apps/v1/deployment"
 	jobinformer "knative.dev/pkg/client/injection/kube/informers/batch/v1/job"
+	serviceinformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/service"
 
 	pullsubscriptioninformers "github.com/google/knative-gcp/pkg/client/injection/informers/pubsub/v1alpha1/pullsubscription"
 )
@@ -60,9 +60,9 @@ func NewController(
 	cmw configmap.Watcher,
 ) *controller.Impl {
 
-	deploymentInformer := deploymentinformer.Get(ctx)
 	sourceInformer := pullsubscriptioninformers.Get(ctx)
 	jobInformer := jobinformer.Get(ctx)
+	serviceInformer := serviceinformer.Get(ctx)
 
 	logger := logging.FromContext(ctx).Named(controllerAgentName)
 
@@ -78,7 +78,7 @@ func NewController(
 
 	c := &Reconciler{
 		PubSubBase:          pubsubBase,
-		deploymentLister:    deploymentInformer.Lister(),
+		serviceLister:       serviceInformer.Lister(),
 		sourceLister:        sourceInformer.Lister(),
 		receiveAdapterImage: env.ReceiveAdapter,
 	}
@@ -87,7 +87,7 @@ func NewController(
 	c.Logger.Info("Setting up event handlers")
 	sourceInformer.Informer().AddEventHandler(controller.HandleAll(impl.Enqueue))
 
-	deploymentInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
+	serviceInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
 		FilterFunc: controller.Filter(v1alpha1.SchemeGroupVersion.WithKind("PullSubscription")),
 		Handler:    controller.HandleAll(impl.EnqueueControllerOf),
 	})

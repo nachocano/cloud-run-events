@@ -23,7 +23,6 @@ import (
 
 	"knative.dev/pkg/metrics"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	appsv1listers "k8s.io/client-go/listers/apps/v1"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/google/go-cmp/cmp"
@@ -51,6 +49,8 @@ import (
 	pubsubOps "github.com/google/knative-gcp/pkg/operations/pubsub"
 	"github.com/google/knative-gcp/pkg/reconciler/pubsub"
 	"github.com/google/knative-gcp/pkg/reconciler/pullsubscription/resources"
+	servingv1 "knative.dev/serving/pkg/apis/serving/v1"
+	servingv1listers "knative.dev/serving/pkg/client/listers/serving/v1"
 )
 
 const (
@@ -68,7 +68,7 @@ const (
 type Reconciler struct {
 	*pubsub.PubSubBase
 
-	deploymentLister appsv1listers.DeploymentLister
+	serviceLister servingv1listers.ServiceLister
 
 	// listers index properties about resources
 	sourceLister listers.PullSubscriptionLister
@@ -448,7 +448,7 @@ func removeFinalizer(s *v1alpha1.PullSubscription) {
 	s.Finalizers = finalizers.List()
 }
 
-func (r *Reconciler) createOrUpdateReceiveAdapter(ctx context.Context, src *v1alpha1.PullSubscription) (*appsv1.Deployment, error) {
+func (r *Reconciler) createOrUpdateReceiveAdapter(ctx context.Context, src *v1alpha1.PullSubscription) (*servingv1.Service, error) {
 	existing, err := r.getReceiveAdapter(ctx, src)
 	if err != nil && !apierrors.IsNotFound(err) {
 		logging.FromContext(ctx).Error("Unable to get an existing receive adapter", zap.Error(err))
@@ -486,13 +486,13 @@ func (r *Reconciler) createOrUpdateReceiveAdapter(ctx context.Context, src *v1al
 	})
 
 	if existing == nil {
-		ra, err := r.KubeClientSet.AppsV1().Deployments(src.Namespace).Create(desired)
+		ra, err := r.ServingClientSet.ServingV1().Services(src.Namespace).Create(desired)
 		logging.FromContext(ctx).Desugar().Info("Receive Adapter created.", zap.Error(err), zap.Any("receiveAdapter", ra))
 		return ra, err
 	}
 	if diff := cmp.Diff(desired.Spec, existing.Spec); diff != "" {
 		existing.Spec = desired.Spec
-		ra, err := r.KubeClientSet.AppsV1().Deployments(src.Namespace).Update(existing)
+		ra, err := r.ServingClientSet.ServingV1().Services(src.Namespace).Update(existing)
 		logging.FromContext(ctx).Desugar().Info("Receive Adapter updated.",
 			zap.Error(err), zap.Any("receiveAdapter", ra), zap.String("diff", diff))
 		return ra, err
@@ -501,17 +501,17 @@ func (r *Reconciler) createOrUpdateReceiveAdapter(ctx context.Context, src *v1al
 	return existing, nil
 }
 
-func (r *Reconciler) getReceiveAdapter(ctx context.Context, src *v1alpha1.PullSubscription) (*appsv1.Deployment, error) {
-	dl, err := r.KubeClientSet.AppsV1().Deployments(src.Namespace).List(metav1.ListOptions{
+func (r *Reconciler) getReceiveAdapter(ctx context.Context, src *v1alpha1.PullSubscription) (*servingv1.Service, error) {
+	dl, err := r.ServingClientSet.ServingV1().Services(src.Namespace).List(metav1.ListOptions{
 		LabelSelector: resources.GetLabelSelector(controllerAgentName, src.Name).String(),
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: appsv1.SchemeGroupVersion.String(),
-			Kind:       "Deployment",
+			APIVersion: servingv1.SchemeGroupVersion.String(),
+			Kind:       "Service",
 		},
 	})
 
 	if err != nil {
-		logging.FromContext(ctx).Desugar().Error("Unable to list deployments: %v", zap.Error(err))
+		logging.FromContext(ctx).Desugar().Error("Unable to list services: %v", zap.Error(err))
 		return nil, err
 	}
 	for _, dep := range dl.Items {

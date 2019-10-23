@@ -28,9 +28,9 @@ import (
 	"knative.dev/pkg/kmeta"
 	"knative.dev/pkg/logging"
 
-	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	servingv1 "knative.dev/serving/pkg/apis/serving/v1"
 )
 
 // ReceiveAdapterArgs are the arguments needed to create a PullSubscription Receive
@@ -55,7 +55,7 @@ const (
 
 // MakeReceiveAdapter generates (but does not insert into K8s) the Receive Adapter Deployment for
 // PullSubscriptions.
-func MakeReceiveAdapter(ctx context.Context, args *ReceiveAdapterArgs) *v1.Deployment {
+func MakeReceiveAdapter(ctx context.Context, args *ReceiveAdapterArgs) *servingv1.Service {
 
 	secret := args.Source.Spec.Secret
 
@@ -92,8 +92,7 @@ func MakeReceiveAdapter(ctx context.Context, args *ReceiveAdapterArgs) *v1.Deplo
 	}
 
 	credsFile := fmt.Sprintf("%s/%s", credsMountPath, secret.Key)
-	replicas := int32(1)
-	return &v1.Deployment{
+	return &servingv1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       args.Source.Namespace,
 			Name:            GenerateSubscriptionName(args.Source),
@@ -101,81 +100,82 @@ func MakeReceiveAdapter(ctx context.Context, args *ReceiveAdapterArgs) *v1.Deplo
 			OwnerReferences: []metav1.OwnerReference{*kmeta.NewControllerRef(args.Source)},
 			Annotations:     map[string]string{},
 		},
-		Spec: v1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: args.Labels,
-			},
-			Replicas: &replicas,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: args.Labels,
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Name:  "receive-adapter",
-						Image: args.Image,
-						Env: []corev1.EnvVar{{
-							Name:  "GOOGLE_APPLICATION_CREDENTIALS",
-							Value: credsFile,
-						}, {
-							Name:  "PROJECT_ID",
-							Value: args.Source.Spec.Project,
-						}, {
-							Name:  "PUBSUB_TOPIC_ID",
-							Value: args.Source.Spec.Topic,
-						}, {
-							Name:  "PUBSUB_SUBSCRIPTION_ID",
-							Value: args.SubscriptionID,
-						}, {
-							Name:  "SINK_URI",
-							Value: args.SinkURI,
-						}, {
-							Name:  "TRANSFORMER_URI",
-							Value: args.TransformerURI,
-						}, {
-							Name:  "SEND_MODE",
-							Value: string(mode),
-						}, {
-							Name:  "K_CE_EXTENSIONS",
-							Value: ceExtensions,
-						}, {
-							Name:  "K_METRICS_CONFIG",
-							Value: args.MetricsConfig,
-						}, {
-							Name:  "K_LOGGING_CONFIG",
-							Value: args.LoggingConfig,
-						}, {
-							Name:  "NAME",
-							Value: resourceName,
-						}, {
-							Name:  "NAMESPACE",
-							Value: args.Source.Namespace,
-						}, {
-							Name:  "RESOURCE_GROUP",
-							Value: resourceGroup,
-						}, {
-							Name:  "METRICS_DOMAIN",
-							Value: metricsDomain,
-						}},
-						VolumeMounts: []corev1.VolumeMount{{
-							Name:      credsVolume,
-							MountPath: credsMountPath,
-						}},
-						Ports: []corev1.ContainerPort{{
-							Name:          "metrics",
-							ContainerPort: 9090,
-						}}},
+		Spec: servingv1.ServiceSpec{
+			ConfigurationSpec: servingv1.ConfigurationSpec{
+				Template: servingv1.RevisionTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: args.Labels,
 					},
-					Volumes: []corev1.Volume{{
-						Name: credsVolume,
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: secret.Name,
+					Spec: servingv1.RevisionSpec{
+						PodSpec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  "receive-adapter",
+								Image: args.Image,
+								Env: []corev1.EnvVar{{
+									Name:  "GOOGLE_APPLICATION_CREDENTIALS",
+									Value: credsFile,
+								}, {
+									Name:  "PROJECT_ID",
+									Value: args.Source.Spec.Project,
+								}, {
+									Name:  "PUBSUB_TOPIC_ID",
+									Value: args.Source.Spec.Topic,
+								}, {
+									Name:  "PUBSUB_SUBSCRIPTION_ID",
+									Value: args.SubscriptionID,
+								}, {
+									Name:  "SINK_URI",
+									Value: args.SinkURI,
+								}, {
+									Name:  "TRANSFORMER_URI",
+									Value: args.TransformerURI,
+								}, {
+									Name:  "SEND_MODE",
+									Value: string(mode),
+								}, {
+									Name:  "K_CE_EXTENSIONS",
+									Value: ceExtensions,
+								}, {
+									Name:  "K_METRICS_CONFIG",
+									Value: args.MetricsConfig,
+								}, {
+									Name:  "K_LOGGING_CONFIG",
+									Value: args.LoggingConfig,
+								}, {
+									Name:  "NAME",
+									Value: resourceName,
+								}, {
+									Name:  "NAMESPACE",
+									Value: args.Source.Namespace,
+								}, {
+									Name:  "RESOURCE_GROUP",
+									Value: resourceGroup,
+								}, {
+									Name:  "METRICS_DOMAIN",
+									Value: metricsDomain,
+								}},
+								VolumeMounts: []corev1.VolumeMount{{
+									Name:      credsVolume,
+									MountPath: credsMountPath,
+								}}},
+							//Ports: []corev1.ContainerPort{{
+							//	Name:          "metrics",
+							//	ContainerPort: 9090,
+							//}}},
 							},
+							Volumes: []corev1.Volume{{
+								Name: credsVolume,
+								VolumeSource: corev1.VolumeSource{
+									Secret: &corev1.SecretVolumeSource{
+										SecretName: secret.Name,
+									},
+								},
+							}},
 						},
-					}},
+					},
 				},
 			},
 		},
 	}
+
 }
