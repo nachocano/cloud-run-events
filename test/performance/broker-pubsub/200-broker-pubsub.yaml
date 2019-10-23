@@ -35,9 +35,9 @@ spec:
             image: knative.dev/eventing/test/test_images/performance
             args:
               - "--roles=sender,receiver"
-              - "--sink=http://pubsub-broker"
+              - "--sink=http://pubsub-broker.default.svc.cluster.local"
               - "--aggregator=broker-pubsub-aggregator:10000"
-              - "--pace=1000:120"
+              - "--pace=1000:60"
             env:
               - name: GOGC
                 value: "off"
