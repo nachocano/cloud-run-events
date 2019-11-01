@@ -144,6 +144,12 @@ rules:
     - eventtypes
   verbs: *everything
 
+- apiGroups:
+    - pubsub.cnrm.cloud.google.com
+  resources:
+    - pubsubsubscriptions
+  verbs: *everything
+
 
 ---
 # The role is needed for the aggregated role source-observer in knative-eventing to provide readonly access to "Sources".
