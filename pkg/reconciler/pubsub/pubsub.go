@@ -19,6 +19,10 @@ package pubsub
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"time"
 
 	"go.uber.org/zap"
@@ -26,14 +30,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 
-	"knative.dev/pkg/apis"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
 
 	"github.com/google/knative-gcp/pkg/apis/events/v1alpha1"
-	pubsubv1alpha1 "github.com/google/knative-gcp/pkg/apis/pubsub/v1alpha1"
 	listers "github.com/google/knative-gcp/pkg/client/listers/events/v1alpha1"
-	pubsublisters "github.com/google/knative-gcp/pkg/client/listers/pubsub/v1alpha1"
 	"github.com/google/knative-gcp/pkg/reconciler"
 	"github.com/google/knative-gcp/pkg/reconciler/resources"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -55,7 +56,7 @@ type Reconciler struct {
 	// pubsubLister for reading pubsubs.
 	pubsubLister listers.PubSubLister
 	// pullsubscriptionLister for reading pullsubscriptions.
-	pullsubscriptionLister pubsublisters.PullSubscriptionLister
+	// pullsubscriptionLister pubsublisters.PullSubscriptionLister
 
 	receiveAdapterName string
 }
@@ -122,39 +123,53 @@ func (r *Reconciler) reconcile(ctx context.Context, source *v1alpha1.PubSub) err
 		return nil
 	}
 
-	ps, err := r.reconcilePullSubscription(ctx, source)
+	_, err := r.reconcilePubSubSubscription(ctx, source)
 	if err != nil {
-		r.Logger.Infof("Failed to reconcile PubSub: %s", err)
+		logging.FromContext(ctx).Infof("Failed to reconcile PubSub: %s", err)
 		return err
 	}
-	source.Status.PropagatePullSubscriptionStatus(ps.Status.GetCondition(apis.ConditionReady))
+	// source.Status.PropagatePullSubscriptionStatus(pss.Status.GetCondition(apis.ConditionReady))
 
-	r.Logger.Infof("Using %q as a cluster internal sink", ps.Status.SinkURI)
-	uri, err := apis.ParseURL(ps.Status.SinkURI)
-	if err != nil {
-		return err
-	}
-	source.Status.SinkURI = uri
-	r.Logger.Infof("Reconciled: PubSub: %+v PullSubscription: %+v", source, ps)
+	//r.Logger.Infof("Using %q as a cluster internal sink", ps.Status.SinkURI)
+	//uri, err := apis.ParseURL(ps.Status.SinkURI)
+	//if err != nil {
+	//	return err
+	//}
+	//source.Status.SinkURI = uri
+	//r.Logger.Infof("Reconciled: PubSub: %+v PullSubscription: %+v", source, ps)
 	return nil
 }
 
-func (r *Reconciler) reconcilePullSubscription(ctx context.Context, source *v1alpha1.PubSub) (*pubsubv1alpha1.PullSubscription, error) {
-	ps, err := r.pullsubscriptionLister.PullSubscriptions(source.Namespace).Get(source.Name)
+func (r *Reconciler) reconcilePubSubSubscription(ctx context.Context, source *v1alpha1.PubSub) (*unstructured.Unstructured, error) {
+
+	gvk := schema.GroupVersionKind{
+		Group:   "pubsub.cnrm.cloud.google.com",
+		Version: "v1alpha2",
+		Kind:    "PubSubSubscription",
+	}
+
+	gvr, _ := meta.UnsafeGuessKindToResource(gvk)
+	pubsubSubscriptionInterface := r.DynamicClientSet.Resource(gvr).Namespace(source.Namespace)
+	if pubsubSubscriptionInterface == nil {
+		return nil, fmt.Errorf("unable to create dynamic client for: %+v", gvr)
+	}
+
+	pss, err := pubsubSubscriptionInterface.Get(source.Name, metav1.GetOptions{})
 	if err != nil {
 		if !apierrs.IsNotFound(err) {
-			r.Logger.Infof("Failed to get PullSubscriptions: %v", err)
-			return nil, fmt.Errorf("failed to get pullsubscriptions: %v", err)
+			logging.FromContext(ctx).Infof("Failed to get PubSubSubscription: %v", err)
+			return nil, fmt.Errorf("failed to get PubSubSubscription: %v", err)
 		}
-		newPS := resources.MakePullSubscription(source.Namespace, source.Name, &source.Spec.PubSubSpec, source, source.Spec.Topic, r.receiveAdapterName, resourceGroup)
-		r.Logger.Infof("Creating pullsubscription %+v", newPS)
-		ps, err = r.RunClientSet.PubsubV1alpha1().PullSubscriptions(newPS.Namespace).Create(newPS)
+		newpss := resources.MakePubSubSubscription(source.Namespace, source.Name, &source.Spec.PubSubSpec, source, source.Spec.Topic, r.receiveAdapterName, resourceGroup)
+		logging.FromContext(ctx).Infof("Creating PubSubSubscription %+v", newpss)
+		pss, err = pubsubSubscriptionInterface.Create(newpss, metav1.CreateOptions{})
 		if err != nil {
-			r.Logger.Infof("Failed to create PullSubscription: %v", err)
-			return nil, fmt.Errorf("failed to create pullsubscription: %v", err)
+			logging.FromContext(ctx).Infof("Failed to create PubSubSubscription: %v", err)
+			return nil, fmt.Errorf("failed to create PubSubSubscription: %v", err)
 		}
+		return pss, nil
 	}
-	return ps, nil
+	return pss, nil
 }
 
 func (r *Reconciler) updateStatus(ctx context.Context, desired *v1alpha1.PubSub) (*v1alpha1.PubSub, error) {

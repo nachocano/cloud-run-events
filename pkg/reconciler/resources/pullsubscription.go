@@ -18,6 +18,7 @@ package resources
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 	"knative.dev/pkg/kmeta"
 
@@ -64,4 +65,22 @@ func MakePullSubscription(namespace, name string, spec *duckv1alpha1.PubSubSpec,
 		}
 	}
 	return ps
+}
+
+func MakePubSubSubscription(namespace, name string, spec *duckv1alpha1.PubSubSpec, owner kmeta.OwnerRefable, topic, receiveAdapterName, resourceGroup string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "pubsub.cnrm.cloud.google.com/v1alpha2",
+			"kind":       "PubSubSubscription",
+			"metadata": map[string]interface{}{
+				"namespace": namespace,
+				"name":      name,
+			},
+			"spec": map[string]interface{}{
+				"topicRef": map[string]interface{}{
+					"name": topic,
+				},
+			},
+		},
+	}
 }
