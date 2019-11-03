@@ -1,0 +1,1688 @@
+
+---
+# cloud-run-events-core.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    events.cloud.google.com/release: "v0.10.0"
+  name: cloud-run-events
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    events.cloud.google.com/release: "v0.10.0"
+  name: controller
+  namespace: cloud-run-events
+
+---
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      duck.knative.dev/addressable: "true"
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    events.cloud.google.com/release: "v0.10.0"
+  name: addressable-resolver
+rules: []
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    duck.knative.dev/addressable: "true"
+    events.cloud.google.com/release: "v0.10.0"
+  name: service-addressable-resolver
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - services/status
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    duck.knative.dev/addressable: "true"
+    events.cloud.google.com/release: "v0.10.0"
+  name: kservice-addressable-resolver
+rules:
+- apiGroups:
+  - serving.knative.dev
+  resources:
+  - services
+  - services/status
+  - routes
+  - routes/status
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    duck.knative.dev/addressable: "true"
+    events.cloud.google.com/release: "v0.10.0"
+  name: pubsub-topic-addressable-resolver
+rules:
+- apiGroups:
+  - pubsub.cloud.google.com
+  resources:
+  - topics
+  - topics/status
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    duck.knative.dev/addressable: "true"
+    events.cloud.google.com/release: "v0.10.0"
+  name: events-channel-addressable-resolver
+rules:
+- apiGroups:
+  - messaging.cloud.google.com
+  resources:
+  - channels
+  - channels/status
+  - decorators
+  - decorators/status
+  verbs:
+  - get
+  - list
+  - watch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    duck.knative.dev/channelable: "true"
+    events.cloud.google.com/release: "v0.10.0"
+  name: events-channel-addressable-resolver
+rules:
+- apiGroups:
+  - messaging.cloud.google.com
+  resources:
+  - channels
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+  - update
+  - patch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    events.cloud.google.com/release: "v0.10.0"
+  name: cloud-run-events-controller
+rules:
+- apiGroups:
+  - pubsub.cloud.google.com
+  resources:
+  - pullsubscriptions
+  - topics
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - pubsub.cloud.google.com
+  resources:
+  - pullsubscriptions/status
+  - topics/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - messaging.cloud.google.com
+  resources:
+  - channels
+  - decorators
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - messaging.cloud.google.com
+  resources:
+  - channels/status
+  - decorators/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - events.cloud.google.com
+  resources:
+  - storages
+  - schedulers
+  - pubsubs
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - events.cloud.google.com
+  resources:
+  - storages/status
+  - schedulers/status
+  - pubsubs/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - serving.knative.dev
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+  - finalize
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - eventing.knative.dev
+  resources:
+  - eventtypes
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    duck.knative.dev/source: "true"
+    eventing.knative.dev/release: devel
+  name: knative-gcp-pullsubscription-observer
+rules:
+- apiGroups:
+  - pubsub.cloud.google.com
+  resources:
+  - pullsubscriptions
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    duck.knative.dev/source: "true"
+    eventing.knative.dev/release: devel
+  name: knative-gcp-storage-observer
+rules:
+- apiGroups:
+  - events.cloud.google.com
+  resources:
+  - storages
+  - pubsubs
+  verbs:
+  - get
+  - list
+  - watch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    events.cloud.google.com/release: "v0.10.0"
+  name: cloud-run-events-controller
+  namespace: cloud-run-events
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    events.cloud.google.com/release: "v0.10.0"
+  name: cloud-run-events-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cloud-run-events-controller
+subjects:
+- kind: ServiceAccount
+  name: controller
+  namespace: cloud-run-events
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    events.cloud.google.com/release: "v0.10.0"
+  name: cloud-run-events-controller-resolver
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: addressable-resolver
+subjects:
+- kind: ServiceAccount
+  name: controller
+  namespace: cloud-run-events
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    events.cloud.google.com/release: "v0.10.0"
+  name: cloud-run-events-controller
+  namespace: cloud-run-events
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cloud-run-events-controller
+subjects:
+- kind: ServiceAccount
+  name: controller
+  namespace: cloud-run-events
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    duck.knative.dev/addressable: "true"
+    events.cloud.google.com/crd-install: "true"
+    events.cloud.google.com/release: "v0.10.0"
+    messaging.knative.dev/subscribable: "true"
+  name: channels.messaging.cloud.google.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.conditions[?(@.type=="Ready")].status
+    name: Ready
+    type: string
+  - JSONPath: .status.conditions[?(@.type=="Ready")].reason
+    name: Reason
+    type: string
+  - JSONPath: .status.address.url
+    name: Address
+    type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  group: messaging.cloud.google.com
+  names:
+    categories:
+    - all
+    - knative
+    - pubsub
+    - messaging
+    - channel
+    kind: Channel
+    plural: channels
+    shortNames:
+    - pschan
+    singular: channel
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            project:
+              description: ID of the Google Cloud Project to own the Pub/Sub credentials.
+                E.g. 'my-project-1234' rather than its display name, 'My Project'
+                or its number '1234567890'.
+              type: string
+            secret:
+              description: Credential to use to manage Cloud Pub/Sub. The value of
+                the secret entry must be a service account key in the JSON format
+                (see https://cloud.google.com/iam/docs/creating-managing-service-account-keys).
+                Defaults to secret.name of 'google-cloud-key' and secret.key of 'key.json'.
+              type: object
+            subscribable:
+              properties:
+                subscribers:
+                  items:
+                    properties:
+                      ref:
+                        properties:
+                          apiVersion:
+                            type: string
+                          kind:
+                            type: string
+                          name:
+                            minLength: 1
+                            type: string
+                          namespace:
+                            minLength: 1
+                            type: string
+                          uid:
+                            minLength: 1
+                            type: string
+                        required:
+                        - namespace
+                        - name
+                        - uid
+                        type: object
+                      replyURI:
+                        minLength: 1
+                        type: string
+                      subscriberURI:
+                        minLength: 1
+                        type: string
+                      uid:
+                        minLength: 1
+                        type: string
+                    required:
+                    - uid
+                  type: array
+              type: object
+        status:
+          properties:
+            address:
+              properties:
+                url:
+                  type: string
+              type: object
+            conditions:
+              items:
+                properties:
+                  lastTransitionTime:
+                    type: string
+                  message:
+                    type: string
+                  reason:
+                    type: string
+                  severity:
+                    type: string
+                  status:
+                    type: string
+                  type:
+                    type: string
+                required:
+                - type
+                - status
+                type: object
+              type: array
+            observedGeneration:
+              format: int64
+              type: integer
+            projectId:
+              type: string
+            subscribableStatus:
+              properties:
+                subscribers:
+                  items:
+                    properties:
+                      message:
+                        type: string
+                      observedGeneration:
+                        format: int64
+                        type: integer
+                      ready:
+                        type: string
+                      uid:
+                        type: string
+                    type: object
+                  type: array
+              type: object
+            subscribablestatus:
+              type: object
+            subscriptionId:
+              type: string
+          type: object
+  version: v1alpha1
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    events.cloud.google.com/crd-install: "true"
+    events.cloud.google.com/release: "v0.10.0"
+    messaging.knative.dev/subscribable: "true"
+  name: decorators.messaging.cloud.google.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.conditions[?(@.type=="Ready")].status
+    name: Ready
+    type: string
+  - JSONPath: .status.conditions[?(@.type=="Ready")].reason
+    name: Reason
+    type: string
+  - JSONPath: .status.address.url
+    name: Address
+    type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  group: messaging.cloud.google.com
+  names:
+    categories:
+    - all
+    - knative
+    - messaging
+    kind: Decorator
+    plural: decorators
+    singular: decorator
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            extensions:
+              description: Map of attributes that will be added to the event and forwarded.
+              type: object
+            sink:
+              description: Reference to an object that will resolve to a domain name
+                to use as the sink.
+              type: object
+        status:
+          properties:
+            conditions:
+              items:
+                properties:
+                  lastTransitionTime:
+                    type: string
+                  message:
+                    type: string
+                  reason:
+                    type: string
+                  severity:
+                    type: string
+                  status:
+                    type: string
+                  type:
+                    type: string
+                required:
+                - type
+                - status
+                type: object
+              type: array
+            observedGeneration:
+              format: int64
+              type: integer
+            sinkUri:
+              type: string
+          type: object
+  version: v1alpha1
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    registry.knative.dev/eventTypes: |
+      [
+        { "type": "com.google.cloud.pubsub.topic.publish", "description": "This event is sent when a message is published to a Cloud Pub/Sub topic."}
+      ]
+  labels:
+    duck.knative.dev/source: "true"
+    eventing.knative.dev/source: "true"
+    events.cloud.google.com/crd-install: "true"
+    events.cloud.google.com/release: "v0.10.0"
+  name: pubsubs.events.cloud.google.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.conditions[?(@.type=="Ready")].status
+    name: Ready
+    type: string
+  - JSONPath: .status.conditions[?(@.type=="Ready")].reason
+    name: Reason
+    type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  group: events.cloud.google.com
+  names:
+    categories:
+    - all
+    - knative
+    - pubsub
+    kind: PubSub
+    plural: pubsubs
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            ackDeadline:
+              description: The default maximum time after a subscriber receives a
+                message before the subscriber should acknowledge the message. Defaults
+                to `30s`. Valid time units are `s`, `m`, `h`. The minimum deadline
+                you can specify is 0 seconds. The maximum deadline you can specify
+                is 600 seconds (10 minutes).
+              type: string
+            ceOverrides:
+              description: Defines overrides to control modifications of the event
+                sent to the sink.
+              properties:
+                extensions:
+                  description: Extensions specify what attribute are added or overridden
+                    on the outbound event. Each `Extensions` key-value pair are set
+                    on the event as an attribute extension independently.
+                  type: object
+              type: object
+            project:
+              description: ID of the Google Cloud Project that the Pub/Sub Topic exists
+                in. E.g. 'my-project-1234' rather than its display name, 'My Project'
+                or its number '1234567890'.
+              type: string
+            retainAckedMessages:
+              description: Whether to retain acknowledged messages. If true, acknowledged
+                messages will not be expunged until they fall out of the RetentionDuration
+                window.
+              type: boolean
+            retentionDuration:
+              description: How long to retain messages in backlog, from the time of
+                publish. If retainAckedMessages is true, this duration affects the
+                retention of acknowledged messages, otherwise only unacknowledged
+                messages are retained. Defaults to 7 days (`168h`). Cannot be longer
+                than 7 days or shorter than 10 minutes. Valid time units are `s`,
+                `m`, `h`.
+              type: string
+            secret:
+              description: Credential to use to poll the Cloud Pub/Sub Subscription.
+                It is not used to create or delete the Subscription, only to poll
+                it. The value of the secret entry must be a service account key in
+                the JSON format (see https://cloud.google.com/iam/docs/creating-managing-service-account-keys).  Defaults
+                to secret.name of 'google-cloud-key' and secret.key of 'key.json'.
+              type: object
+            sink:
+              anyOf:
+              - properties:
+                  uri:
+                    minLength: 1
+                    type: string
+                type: object
+              - properties:
+                  ref:
+                    properties:
+                      apiVersion:
+                        minLength: 1
+                        type: string
+                      kind:
+                        minLength: 1
+                        type: string
+                      name:
+                        minLength: 1
+                        type: string
+                    required:
+                    - apiVersion
+                    - kind
+                    - name
+                    type: object
+                type: object
+              - properties:
+                  apiVersion:
+                    minLength: 1
+                    type: string
+                  kind:
+                    minLength: 1
+                    type: string
+                  name:
+                    minLength: 1
+                    type: string
+                type: object
+              description: Reference to an object that will resolve to a domain name
+                to use as the sink.
+              type: object
+            topic:
+              description: ID of the Cloud Pub/Sub Topic to Subscribe to. It must
+                be in the form of the unique identifier within the project, not the
+                entire name. E.g. it must be 'laconia', not 'projects/my-gcp-project/topics/laconia'.
+              type: string
+          required:
+          - sink
+          - topic
+          type: object
+        status:
+          properties:
+            conditions:
+              items:
+                properties:
+                  lastTransitionTime:
+                    type: string
+                  message:
+                    type: string
+                  reason:
+                    type: string
+                  severity:
+                    type: string
+                  status:
+                    type: string
+                  type:
+                    type: string
+                required:
+                - type
+                - status
+                type: object
+              type: array
+            observedGeneration:
+              format: int64
+              type: integer
+            sinkUri:
+              type: string
+          type: object
+  version: v1alpha1
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    registry.knative.dev/eventTypes: |
+      [
+        { "type": "com.google.cloud.pubsub.topic.publish", "description": "This event is sent when a message is published to a Cloud Pub/Sub topic."}
+      ]
+  labels:
+    events.cloud.google.com/crd-install: "true"
+    events.cloud.google.com/release: "v0.10.0"
+  name: pullsubscriptions.pubsub.cloud.google.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.conditions[?(@.type=="Ready")].status
+    name: Ready
+    type: string
+  - JSONPath: .status.conditions[?(@.type=="Ready")].reason
+    name: Reason
+    type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  group: pubsub.cloud.google.com
+  names:
+    categories:
+    - all
+    - knative
+    - pubsub
+    kind: PullSubscription
+    plural: pullsubscriptions
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            ackDeadline:
+              description: The default maximum time after a subscriber receives a
+                message before the subscriber should acknowledge the message. Defaults
+                to `30s`. Valid time units are `s`, `m`, `h`. The minimum deadline
+                you can specify is 0 seconds. The maximum deadline you can specify
+                is 600 seconds (10 minutes).
+              type: string
+            ceOverrides:
+              description: Defines overrides to control modifications of the event
+                sent to the sink.
+              properties:
+                extensions:
+                  description: Extensions specify what attribute are added or overridden
+                    on the outbound event. Each `Extensions` key-value pair are set
+                    on the event as an attribute extension independently.
+                  type: object
+              type: object
+            mode:
+              description: Mode defines the encoding and structure of the payload
+                of when this PullSubscription invokes the sink. Default is CloudEventsBinary.
+              enum:
+              - CloudEventsBinary
+              - CloudEventsStructured
+              - PushCompatible
+              type: string
+            project:
+              description: ID of the Google Cloud Project that the Pub/Sub Topic exists
+                in. E.g. 'my-project-1234' rather than its display name, 'My Project'
+                or its number '1234567890'.
+              type: string
+            retainAckedMessages:
+              description: Whether to retain acknowledged messages. If true, acknowledged
+                messages will not be expunged until they fall out of the RetentionDuration
+                window.
+              type: boolean
+            retentionDuration:
+              description: How long to retain messages in backlog, from the time of
+                publish. If retainAckedMessages is true, this duration affects the
+                retention of acknowledged messages, otherwise only unacknowledged
+                messages are retained. Defaults to 7 days (`168h`). Cannot be longer
+                than 7 days or shorter than 10 minutes. Valid time units are `s`,
+                `m`, `h`.
+              type: string
+            secret:
+              description: Credential to use to poll the Cloud Pub/Sub Subscription.
+                It is not used to create or delete the Subscription, only to poll
+                it. The value of the secret entry must be a service account key in
+                the JSON format (see https://cloud.google.com/iam/docs/creating-managing-service-account-keys).  Defaults
+                to secret.name of 'google-cloud-key' and secret.key of 'key.json'.
+              type: object
+            sink:
+              anyOf:
+              - properties:
+                  uri:
+                    minLength: 1
+                    type: string
+                type: object
+              - properties:
+                  ref:
+                    properties:
+                      apiVersion:
+                        minLength: 1
+                        type: string
+                      kind:
+                        minLength: 1
+                        type: string
+                      name:
+                        minLength: 1
+                        type: string
+                    required:
+                    - apiVersion
+                    - kind
+                    - name
+                    type: object
+                type: object
+              - properties:
+                  apiVersion:
+                    minLength: 1
+                    type: string
+                  kind:
+                    minLength: 1
+                    type: string
+                  name:
+                    minLength: 1
+                    type: string
+                type: object
+              description: Reference to an object that will resolve to a domain name
+                to use as the sink.
+              type: object
+            topic:
+              description: ID of the Cloud Pub/Sub Topic to Subscribe to. It must
+                be in the form of the unique identifier within the project, not the
+                entire name. E.g. it must be 'laconia', not 'projects/my-gcp-project/topics/laconia'.
+              type: string
+            transformer:
+              description: Reference to an object that will resolve to a domain name
+                to use as the transformer.
+              type: object
+          required:
+          - sink
+          - topic
+          type: object
+        status:
+          properties:
+            conditions:
+              items:
+                properties:
+                  lastTransitionTime:
+                    type: string
+                  message:
+                    type: string
+                  reason:
+                    type: string
+                  severity:
+                    type: string
+                  status:
+                    type: string
+                  type:
+                    type: string
+                required:
+                - type
+                - status
+                type: object
+              type: array
+            observedGeneration:
+              format: int64
+              type: integer
+            projectId:
+              type: string
+            sinkUri:
+              type: string
+            subscriptionId:
+              type: string
+            transformerUri:
+              type: string
+          type: object
+  version: v1alpha1
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    registry.knative.dev/eventTypes: |
+      [
+        { "type": "com.google.cloud.pubsub.topic.publish", "description": "This event is sent when a message is published to a Cloud Pub/Sub topic."}
+      ]
+  labels:
+    duck.knative.dev/source: "true"
+    eventing.knative.dev/source: "true"
+    events.cloud.google.com/crd-install: "true"
+    events.cloud.google.com/release: "v0.10.0"
+  name: schedulers.events.cloud.google.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.conditions[?(@.type=="Ready")].status
+    name: Ready
+    type: string
+  - JSONPath: .status.conditions[?(@.type=="Ready")].reason
+    name: Reason
+    type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  group: events.cloud.google.com
+  names:
+    categories:
+    - all
+    - knative
+    - scheduler
+    kind: Scheduler
+    plural: schedulers
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            data:
+              description: Data to send in the payload of the Event.
+              type: string
+            location:
+              description: Location to create the Scheduler job in.
+              type: string
+            project:
+              description: Google Cloud Project ID of the project into which the Scheduler
+                job should be created. If omitted uses the Project ID from the GKE
+                cluster metadata service.
+              type: string
+            pubSubSecret:
+              description: Optional credential to use for creating a Topic and subscribing
+                to the Topic. If omitted, uses secret. Must be a service account key
+                in JSON format (see https://cloud.google.com/iam/docs/creating-managing-service-account-keys).
+              type: object
+            schedule:
+              description: Frequency using the unix-cron format. Or App Engine Cron
+                format.
+              type: string
+            secret:
+              description: Credential to use for managing Scheduler Jobs. Must be
+                a service account key in JSON format (see https://cloud.google.com/iam/docs/creating-managing-service-account-keys).
+                If omitted, defaults to 'google-cloud-key'.
+              type: object
+            sink:
+              anyOf:
+              - properties:
+                  uri:
+                    minLength: 1
+                    type: string
+                type: object
+              - properties:
+                  ref:
+                    properties:
+                      apiVersion:
+                        minLength: 1
+                        type: string
+                      kind:
+                        minLength: 1
+                        type: string
+                      name:
+                        minLength: 1
+                        type: string
+                    required:
+                    - apiVersion
+                    - kind
+                    - name
+                    type: object
+                type: object
+              - properties:
+                  apiVersion:
+                    minLength: 1
+                    type: string
+                  kind:
+                    minLength: 1
+                    type: string
+                  name:
+                    minLength: 1
+                    type: string
+                type: object
+              description: Sink which receives the notifications.
+              type: object
+          required:
+          - location
+          - schedule
+          - sink
+          - data
+        status:
+          properties:
+            conditions:
+              items:
+                properties:
+                  lastTransitionTime:
+                    type: string
+                  message:
+                    type: string
+                  reason:
+                    type: string
+                  severity:
+                    type: string
+                  status:
+                    type: string
+                  type:
+                    type: string
+                required:
+                - type
+                - status
+                type: object
+              type: array
+            notificationId:
+              type: string
+            projectId:
+              type: string
+            sinkUri:
+              type: string
+            subscriptionId:
+              type: string
+            topicId:
+              type: string
+          type: object
+  version: v1alpha1
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    registry.knative.dev/eventTypes: |
+      [
+        { "type": "com.google.cloud.storage.object.finalize", "schema": "https://raw.githubusercontent.com/google/knative-gcp/master/schemas/storage/schema.json", "description": "Sent when a new object (or a new generation of an existing object) is successfully created in the bucket. This includes copying or rewriting an existing object. A failed upload does not trigger this event." },
+        { "type": "com.google.cloud.storage.object.delete", "schema": "https://raw.githubusercontent.com/google/knative-gcp/master/schemas/storage/schema.json", "description": "Sent when an object has been permanently deleted. This includes objects that are overwritten or are deleted as part of the bucket's lifecycle configuration. For buckets with object versioning enabled, this is not sent when an object is archived."},
+        { "type": "com.google.cloud.storage.object.archive", "schema": "https://raw.githubusercontent.com/google/knative-gcp/master/schemas/storage/schema.json", "description": "Only sent when a bucket has enabled object versioning. This event indicates that the live version of an object has become an archived version, either because it was archived or because it was overwritten by the upload of an object of the same name."},
+        { "type": "com.google.cloud.storage.object.metadataUpdate", "schema": "https://raw.githubusercontent.com/google/knative-gcp/master/schemas/storage/schema.json", "description": "Sent when the metadata of an existing object changes." }
+      ]
+  labels:
+    duck.knative.dev/source: "true"
+    eventing.knative.dev/source: "true"
+    events.cloud.google.com/crd-install: "true"
+    events.cloud.google.com/release: "v0.10.0"
+  name: storages.events.cloud.google.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.conditions[?(@.type=="Ready")].status
+    name: Ready
+    type: string
+  - JSONPath: .status.conditions[?(@.type=="Ready")].reason
+    name: Reason
+    type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  group: events.cloud.google.com
+  names:
+    categories:
+    - all
+    - knative
+    - storage
+    kind: Storage
+    plural: storages
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            bucket:
+              description: GCS bucket to subscribe to. For example my-test-bucket
+              type: string
+            eventTypes:
+              items:
+                enum:
+                - com.google.cloud.storage.object.finalize
+                - com.google.cloud.storage.object.delete
+                - com.google.cloud.storage.object.archive
+                - com.google.cloud.storage.object.metadataUpdate
+                type: string
+              type: array
+            objectNamePrefix:
+              description: Optional prefix to only notify when objects match this
+                prefix.
+              type: string
+            payloadFormat:
+              description: Optional payload format. Either NONE or JSON_API_V1. If
+                omitted, uses JSON_API_V1.
+              type: string
+            project:
+              description: Google Cloud Project ID of the project into which the topic
+                should be created. If omitted uses the Project ID from the GKE cluster
+                metadata service.
+              type: string
+            pubSubSecret:
+              description: Optional credential to use for creating a Topic and subscribing
+                to the Topic. If omitted, uses secret. Must be a service account key
+                in JSON format (see https://cloud.google.com/iam/docs/creating-managing-service-account-keys).
+              type: object
+            secret:
+              description: Credential to use for managing GCS notifications. Must
+                be a service account key in JSON format (see https://cloud.google.com/iam/docs/creating-managing-service-account-keys).
+                If omitted, defaults to 'google-cloud-key'
+              type: object
+            serviceAccountName:
+              description: Service Account to run Receive Adapter as. If omitted,
+                uses 'default'.
+              type: string
+            sink:
+              anyOf:
+              - properties:
+                  uri:
+                    minLength: 1
+                    type: string
+                type: object
+              - properties:
+                  ref:
+                    properties:
+                      apiVersion:
+                        minLength: 1
+                        type: string
+                      kind:
+                        minLength: 1
+                        type: string
+                      name:
+                        minLength: 1
+                        type: string
+                    required:
+                    - apiVersion
+                    - kind
+                    - name
+                    type: object
+                type: object
+              - properties:
+                  apiVersion:
+                    minLength: 1
+                    type: string
+                  kind:
+                    minLength: 1
+                    type: string
+                  name:
+                    minLength: 1
+                    type: string
+                type: object
+              description: Sink which receives the notifications.
+              type: object
+          required:
+          - bucket
+          - sink
+        status:
+          properties:
+            conditions:
+              items:
+                properties:
+                  lastTransitionTime:
+                    type: string
+                  message:
+                    type: string
+                  reason:
+                    type: string
+                  severity:
+                    type: string
+                  status:
+                    type: string
+                  type:
+                    type: string
+                required:
+                - type
+                - status
+                type: object
+              type: array
+            notificationId:
+              type: string
+            observedGeneration:
+              format: int64
+              type: integer
+            projectId:
+              type: string
+            sinkUri:
+              type: string
+            subscriptionId:
+              type: string
+            topicId:
+              type: string
+          type: object
+  version: v1alpha1
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    duck.knative.dev/addressable: "true"
+    events.cloud.google.com/crd-install: "true"
+    events.cloud.google.com/release: "v0.10.0"
+  name: topics.pubsub.cloud.google.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.conditions[?(@.type=="Ready")].status
+    name: Ready
+    type: string
+  - JSONPath: .status.conditions[?(@.type=="Ready")].reason
+    name: Reason
+    type: string
+  - JSONPath: .status.address.hostname
+    name: Hostname
+    type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  group: pubsub.cloud.google.com
+  names:
+    categories:
+    - all
+    - knative
+    - pubsub
+    kind: Topic
+    plural: topics
+    singular: topic
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            project:
+              description: ID of the Google Cloud Project to own the Pub/Sub credentials.
+                E.g. 'my-project-1234' rather than its display name, 'My Project'
+                or its number '1234567890'.
+              type: string
+            propagationPolicy:
+              description: Propagation policy defines how Topic controls the Cloud
+                Pub/Sub topic for lifecycle changes. Default is CreateNoDelete.
+              enum:
+              - CreateDelete
+              - CreateNoDelete
+              - NoCreateNoDelete
+              type: string
+            secret:
+              description: Credential to use to manage Cloud Pub/Sub. The value of
+                the secret entry must be a service account key in the JSON format
+                (see https://cloud.google.com/iam/docs/creating-managing-service-account-keys).
+              type: object
+            topic:
+              description: ID of the Cloud Pub/Sub Topic to create. It must be in
+                the form of the unique identifier within the project, not the entire
+                name. E.g. it must be 'laconia', not 'projects/my-gcp-project/topics/laconia'.
+              type: string
+          required:
+          - topic
+        status:
+          properties:
+            address:
+              properties:
+                url:
+                  type: string
+              type: object
+            conditions:
+              items:
+                properties:
+                  lastTransitionTime:
+                    type: string
+                  message:
+                    type: string
+                  reason:
+                    type: string
+                  severity:
+                    type: string
+                  status:
+                    type: string
+                  type:
+                    type: string
+                required:
+                - type
+                - status
+                type: object
+              type: array
+            observedGeneration:
+              format: int64
+              type: integer
+            projectId:
+              type: string
+            topicId:
+              type: string
+          type: object
+  version: v1alpha1
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: cloud-run-events-controller
+    events.cloud.google.com/release: "v0.10.0"
+  name: controller
+  namespace: cloud-run-events
+spec:
+  ports:
+  - name: metrics
+    port: 9090
+    protocol: TCP
+    targetPort: 9090
+  selector:
+    app: cloud-run-events-controller
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    events.cloud.google.com/release: "v0.10.0"
+    role: webhook
+  name: webhook
+  namespace: cloud-run-events
+spec:
+  ports:
+  - port: 443
+    targetPort: 8443
+  selector:
+    role: webhook
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    events.cloud.google.com/release: "v0.10.0"
+  name: controller
+  namespace: cloud-run-events
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloud-run-events
+      role: controller
+  template:
+    metadata:
+      labels:
+        app: cloud-run-events
+        role: controller
+    spec:
+      containers:
+      - env:
+        - name: PUBSUB_RA_IMAGE
+          value: gcr.io/knative-releases/github.com/google/knative-gcp/cmd/pubsub/receive_adapter@sha256:fc4ec81c33401dadba37d1cb2a14fa69fa070c35194a65354d518dbf4c69f17f
+        - name: PUBSUB_PUBLISHER_IMAGE
+          value: gcr.io/knative-releases/github.com/google/knative-gcp/cmd/pubsub/publisher@sha256:51315142dbac0fb5494262a41d887ccbe257313b72935e22abcfd07eaf93e3e8
+        - name: PUBSUB_TOPIC_IMAGE
+          value: gcr.io/knative-releases/github.com/google/knative-gcp/cmd/operations/topic@sha256:fc7e12d85bb0a05f191c9e5c819f1d76385c92f5db91050cc7262a0f7434da0f
+        - name: PUBSUB_SUB_IMAGE
+          value: gcr.io/knative-releases/github.com/google/knative-gcp/cmd/operations/subscription@sha256:1cf16db3d0d47329933f385c433cef72e57631f38e70fd5902992c81e5413268
+        - name: DECORATOR_IMAGE
+          value: gcr.io/knative-releases/github.com/google/knative-gcp/cmd/decorator@sha256:d30b5800b99e751c1c66a8887c847e388405ba47b09816fabd1e1c6b52f6195f
+        - name: STORAGE_NOTIFICATION_IMAGE
+          value: gcr.io/knative-releases/github.com/google/knative-gcp/cmd/operations/notification@sha256:58bded1c4bc8b719a212443e0566cbb62260329119246f57f2718b13c84df9a6
+        - name: SCHEDULER_JOB_IMAGE
+          value: gcr.io/knative-releases/github.com/google/knative-gcp/cmd/operations/scheduler@sha256:6f0d07521ec8dacc2005e2077418547c66b04fe600ae8696c7f26f4f9fbdd2cc
+        - name: SYSTEM_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: CONFIG_LOGGING_NAME
+          value: config-logging
+        - name: CONFIG_OBSERVABILITY_NAME
+          value: config-observability
+        - name: METRICS_DOMAIN
+          value: cloud.google.com/events
+        image: gcr.io/knative-releases/github.com/google/knative-gcp/cmd/controller@sha256:1285c1688c61afa7f53f4524dd19d745c93ed2edc251eb45085f96fde6bece7c
+        imagePullPolicy: Always
+        name: controller
+        ports:
+        - containerPort: 9090
+          name: metrics
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1000Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        volumeMounts:
+        - mountPath: /etc/config-logging
+          name: config-logging
+      serviceAccount: controller
+      serviceAccountName: controller
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - configMap:
+          name: config-logging
+        name: config-logging
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    events.cloud.google.com/release: "v0.10.0"
+  name: webhook
+  namespace: cloud-run-events
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloud-run-events
+      role: webhook
+  template:
+    metadata:
+      labels:
+        app: cloud-run-events
+        events.cloud.google.com/release: "v0.10.0"
+        role: webhook
+    spec:
+      containers:
+      - env:
+        - name: SYSTEM_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: CONFIG_LOGGING_NAME
+          value: config-logging
+        image: gcr.io/knative-releases/github.com/google/knative-gcp/cmd/webhook@sha256:3d4915c1041e040cdc8199a4dc631343e55c04234c35bc986336a71e7d068860
+        imagePullPolicy: Always
+        name: webhook
+        ports:
+        - containerPort: 9090
+          name: metrics
+        resources:
+          limits:
+            cpu: 200m
+            memory: 200Mi
+          requests:
+            cpu: 20m
+            memory: 20Mi
+        volumeMounts:
+        - mountPath: /etc/config-logging
+          name: config-logging
+      serviceAccountName: controller
+      volumes:
+      - configMap:
+          name: config-logging
+        name: config-logging
+
+---
+apiVersion: v1
+data:
+  _example: |
+    ################################
+    #                              #
+    #    EXAMPLE CONFIGURATION     #
+    #                              #
+    ################################
+
+    # This block is not actually functional configuration,
+    # but serves to illustrate the available configuration
+    # options and document them in a way that is accessible
+    # to users that `kubectl edit` this config map.
+    #
+    # These sample configuration options may be copied out of
+    # this example block and unindented to be in the data block
+    # to actually change the configuration.
+
+    # Common configuration for all Knative codebase
+    zap-logger-config: |
+      {
+        "level": "info",
+        "development": false,
+        "outputPaths": ["stdout"],
+        "errorOutputPaths": ["stderr"],
+        "encoding": "json",
+        "encoderConfig": {
+          "timeKey": "ts",
+          "levelKey": "level",
+          "nameKey": "logger",
+          "callerKey": "caller",
+          "messageKey": "msg",
+          "stacktraceKey": "stacktrace",
+          "lineEnding": "",
+          "levelEncoder": "",
+          "timeEncoder": "iso8601",
+          "durationEncoder": "",
+          "callerEncoder": ""
+        }
+      }
+
+    # Log level overrides
+    # For all components except the autoscaler and queue proxy,
+    # changes are be picked up immediately.
+    # For autoscaler and queue proxy, changes require recreation of the pods.
+    loglevel.controller: "info"
+    loglevel.autoscaler: "info"
+    loglevel.queueproxy: "info"
+    loglevel.webhook: "info"
+    loglevel.activator: "info"
+kind: ConfigMap
+metadata:
+  labels:
+    events.cloud.google.com/release: "v0.10.0"
+  name: config-logging
+  namespace: cloud-run-events
+
+---
+apiVersion: v1
+data:
+  _example: |
+    ################################
+    #                              #
+    #    EXAMPLE CONFIGURATION     #
+    #                              #
+    ################################
+
+    # This block is not actually functional configuration,
+    # but serves to illustrate the available configuration
+    # options and document them in a way that is accessible
+    # to users that `kubectl edit` this config map.
+    #
+    # These sample configuration options may be copied out of
+    # this example block and unindented to be in the data block
+    # to actually change the configuration.
+
+    # metrics.backend-destination field specifies the system metrics destination.
+    # It supports either prometheus (the default) or stackdriver.
+    # Note: Using stackdriver will incur additional charges
+    metrics.backend-destination: prometheus
+
+    # metrics.stackdriver-project-id field specifies the stackdriver project ID. This
+    # field is optional. When running on GCE, application default credentials will be
+    # used if this field is not provided.
+    metrics.stackdriver-project-id: "<your stackdriver project id>"
+
+    # metrics.allow-stackdriver-custom-metrics indicates whether it is allowed to send metrics to
+    # Stackdriver using "global" resource type and custom metric type if the
+    # metrics are not supported by "knative_source" resource type. Setting this
+    # flag to "true" could cause extra Stackdriver charge.
+    # If metrics.backend-destination is not Stackdriver, this is ignored.
+    metrics.allow-stackdriver-custom-metrics: "false"
+
+    # stackdriver-custom-metrics-subdomain is the subdomain to use when sending custom metrics to StackDriver.
+    # If not specified, the default is set to "knative.dev".
+    # If metrics.backend-destination is not Stackdriver, this is ignored.
+    metrics.stackdriver-custom-metrics-subdomain: "<your subdomain>"
+kind: ConfigMap
+metadata:
+  labels:
+    events.cloud.google.com/release: "v0.10.0"
+  name: config-observability
+  namespace: cloud-run-events
+
+---
+apiVersion: v1
+data:
+  _example: |
+    ################################
+    #                              #
+    #    EXAMPLE CONFIGURATION     #
+    #                              #
+    ################################
+    # This block is not actually functional configuration,
+    # but serves to illustrate the available configuration
+    # options and document them in a way that is accessible
+    # to users that `kubectl edit` this config map.
+    #
+    # These sample configuration options may be copied out of
+    # this example block and unindented to be in the data block
+    # to actually change the configuration.
+    #
+    # This may be "zipkin" or "stackdriver", the default is "none"
+    backend: "none"
+
+    # URL to zipkin collector where traces are sent.
+    # This must be specified when backend is "zipkin"
+    zipkin-endpoint: "http://zipkin.istio-system.svc.cluster.local:9411/api/v2/spans"
+
+    # The GCP project into which stackdriver metrics will be written
+    # when backend is "stackdriver".  If unspecified, the project-id
+    # is read from GCP metadata when running on GCP.
+    stackdriver-project-id: "my-project"
+
+    # Enable zipkin debug mode. This allows all spans to be sent to the server
+    # bypassing sampling.
+    debug: "false"
+
+    # Percentage (0-1) of requests to trace
+    sample-rate: "0.1"
+kind: ConfigMap
+metadata:
+  name: config-tracing
+  namespace: cloud-run-events
+
+---

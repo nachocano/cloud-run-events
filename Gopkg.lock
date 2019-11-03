@@ -160,6 +160,14 @@
   version = "v1.0.0"
 
 [[projects]]
+  digest = "1:fcd8ddc48ce648d5fbb36029fe3dd98f29c03377eea5c4a3c436701b0e3f2774"
+  name = "github.com/gobuffalo/envy"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "909ea676d4c90832fefbf55a5a4fb04d8bef8931"
+  version = "v1.7.1"
+
+[[projects]]
   digest = "1:633dde05baa7afd3544cfe4ac16fe3c5450b868cfc6b1558621ee39ebf2273ea"
   name = "github.com/gogo/protobuf"
   packages = [
@@ -312,6 +320,14 @@
   revision = "c2b33e84"
 
 [[projects]]
+  digest = "1:da62aa6632d04e080b8a8b85a59ed9ed1550842a0099a55f3ae3a20d02a3745a"
+  name = "github.com/joho/godotenv"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "23d116af351c84513e1946b527c88823e476be13"
+  version = "v1.3.0"
+
+[[projects]]
   digest = "1:92f6419f388bd31a433b1388910f15a882c9980e383e89ebf8fb2524583707ac"
   name = "github.com/json-iterator/go"
   packages = ["."]
@@ -338,6 +354,14 @@
   ]
   pruneopts = "NUT"
   revision = "efd84ab4db439838cce1b8a5f7dba45ce24cfe47"
+
+[[projects]]
+  digest = "1:56dbf15e091bf7926cb33a57cb6bdfc658fc6d3498d2f76f10a97ce7856f1fde"
+  name = "github.com/markbates/inflect"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "24b83195037b3bc61fcda2d28b7b0518bce293b6"
+  version = "v1.0.4"
 
 [[projects]]
   branch = "master"
@@ -447,9 +471,13 @@
   version = "v3.0.0"
 
 [[projects]]
-  digest = "1:7008ec21a0ce773bd21deefdb7d17fab8cb9f1ae0bc44026cdd2b658ab1582ca"
+  digest = "1:e09ada96a5a41deda4748b1659cc8953961799e798aea557257b56baee4ecaf3"
   name = "github.com/rogpeppe/go-internal"
-  packages = ["semver"]
+  packages = [
+    "modfile",
+    "module",
+    "semver",
+  ]
   pruneopts = "NUT"
   revision = "4bb227c59b1edd467deba87d2149d80915c0bed7"
   version = "v1.4.0"
@@ -1234,10 +1262,12 @@
     "client/clientset/versioned/typed/istio/v1alpha3/fake",
     "client/injection/kube/client",
     "client/injection/kube/client/fake",
+    "client/injection/kube/informers/admissionregistration/v1beta1/mutatingwebhookconfiguration",
     "client/injection/kube/informers/apps/v1/deployment",
     "client/injection/kube/informers/apps/v1/deployment/fake",
     "client/injection/kube/informers/batch/v1/job",
     "client/injection/kube/informers/batch/v1/job/fake",
+    "client/injection/kube/informers/core/v1/secret",
     "client/injection/kube/informers/factory",
     "client/injection/kube/informers/factory/fake",
     "codegen/cmd/injection-gen",
@@ -1279,7 +1309,9 @@
     "tracker",
     "version",
     "webhook",
+    "webhook/certificates",
     "webhook/certificates/resources",
+    "webhook/resourcesemantics",
   ]
   pruneopts = "T"
   revision = "4edd04e15e5729f404d73e843ae12aa17ee93285"
@@ -1434,7 +1466,6 @@
     "k8s.io/client-go/rest",
     "k8s.io/client-go/testing",
     "k8s.io/client-go/tools/cache",
-    "k8s.io/client-go/tools/clientcmd",
     "k8s.io/client-go/tools/record",
     "k8s.io/client-go/util/flowcontrol",
     "k8s.io/code-generator/cmd/client-gen",
@@ -1486,8 +1517,9 @@
     "knative.dev/pkg/tracing",
     "knative.dev/pkg/tracing/config",
     "knative.dev/pkg/tracker",
-    "knative.dev/pkg/version",
     "knative.dev/pkg/webhook",
+    "knative.dev/pkg/webhook/certificates",
+    "knative.dev/pkg/webhook/resourcesemantics",
     "knative.dev/serving/pkg/apis/serving/v1",
     "knative.dev/serving/pkg/apis/serving/v1alpha1",
     "knative.dev/serving/pkg/apis/serving/v1beta1",
