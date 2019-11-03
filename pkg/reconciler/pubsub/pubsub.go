@@ -123,12 +123,14 @@ func (r *Reconciler) reconcile(ctx context.Context, source *v1alpha1.PubSub) err
 		return nil
 	}
 
-	_, err := r.reconcilePubSubSubscription(ctx, source)
+	pss, err := r.reconcilePubSubSubscription(ctx, source)
 	if err != nil {
 		logging.FromContext(ctx).Infof("Failed to reconcile PubSub: %s", err)
 		return err
 	}
-	// source.Status.PropagatePullSubscriptionStatus(pss.Status.GetCondition(apis.ConditionReady))
+
+
+	source.Status.PropagatePullSubscriptionStatus(pss)
 
 	//r.Logger.Infof("Using %q as a cluster internal sink", ps.Status.SinkURI)
 	//uri, err := apis.ParseURL(ps.Status.SinkURI)
