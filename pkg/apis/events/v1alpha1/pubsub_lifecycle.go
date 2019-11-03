@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"knative.dev/pkg/apis/duck"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -52,7 +54,33 @@ func (ps *PubSubStatus) MarkPullSubscriptionReady() {
 	PubSubCondSet.Manage(ps).MarkTrue(duckv1alpha1.PullSubscriptionReady)
 }
 
-func (ps *PubSubStatus) PropagatePullSubscriptionStatus(ready *apis.Condition) {
+func (ps *PubSubStatus) PropagatePullSubscriptionStatus(pss *unstructured.Unstructured) {
+	if  status, ok := pss["status"]; !ok {
+		ps.MarkPullSubscriptionNotReady("PullSubscriptionNotReady", "PullSubscription has no Ready type status")
+	} else {
+		s := &metav1.Status{}
+		if err := duck.FromUnstructured(status, s); err != nil {
+			ps.MarkPullSubscriptionNotReady("PullSubscriptionNotReady", "Error unmarshalling status")
+
+		}
+
+	}
+
+
+
+
+	switch {
+	case ready == nil:
+		ps.MarkPullSubscriptionNotReady("PullSubscriptionNotReady", "PullSubscription has no Ready type status")
+	case ready.IsTrue():
+		ps.MarkPullSubscriptionReady()
+	case ready.IsFalse():
+		ps.MarkPullSubscriptionNotReady(ready.Reason, ready.Message)
+	}
+}
+
+
+func (ps *PubSubStatus) PropagatePubSubSubscriptionStatus(ready *apis.Condition) {
 	switch {
 	case ready == nil:
 		ps.MarkPullSubscriptionNotReady("PullSubscriptionNotReady", "PullSubscription has no Ready type status")
