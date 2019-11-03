@@ -22,18 +22,18 @@ import (
 
 	"knative.dev/pkg/apis/v1alpha1"
 
-	v1 "knative.dev/pkg/apis/duck/v1"
+	"knative.dev/pkg/apis/duck/v1"
 
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	"knative.dev/pkg/apis"
-	"knative.dev/pkg/webhook"
+	"knative.dev/pkg/webhook/resourcesemantics"
 )
 
 func TestDecoratorValidation(t *testing.T) {
 	tests := []struct {
 		name string
-		cr   webhook.GenericCRD
+		cr   resourcesemantics.GenericCRD
 		want *apis.FieldError
 	}{{
 		name: "empty",

@@ -23,8 +23,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	eventingduck "knative.dev/eventing/pkg/apis/duck/v1alpha1"
 	"knative.dev/pkg/apis"
+	"knative.dev/pkg/apis/duck"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
-	"knative.dev/pkg/webhook"
+	"knative.dev/pkg/kmeta"
+	"knative.dev/pkg/webhook/resourcesemantics"
 )
 
 // +genclient
@@ -45,11 +47,15 @@ type Channel struct {
 	Status ChannelStatus `json:"status,omitempty"`
 }
 
-// Check that Channel can be validated, can be defaulted, and has immutable fields.
-var _ apis.Validatable = (*Channel)(nil)
-var _ apis.Defaultable = (*Channel)(nil)
-var _ runtime.Object = (*Channel)(nil)
-var _ webhook.GenericCRD = (*Channel)(nil)
+var (
+	_ apis.Validatable             = (*Channel)(nil)
+	_ apis.Defaultable             = (*Channel)(nil)
+	_ runtime.Object               = (*Channel)(nil)
+	_ kmeta.OwnerRefable           = (*Channel)(nil)
+	_ resourcesemantics.GenericCRD = (*Channel)(nil)
+	_ apis.Immutable               = (*Channel)(nil)
+	_                              = duck.VerifyType(&Channel{}, &duckv1.Conditions{})
+)
 
 // ChannelSpec defines which subscribers have expressed interest in
 // receiving events from this Channel.

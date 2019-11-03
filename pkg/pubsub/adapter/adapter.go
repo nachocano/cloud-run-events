@@ -163,7 +163,6 @@ func (a *Adapter) receive(ctx context.Context, event cloudevents.Event, resp *cl
 		Name:          a.Name,
 		Namespace:     a.Namespace,
 		EventType:     event.Type(),
-		EventSource:   event.Source(),
 		ResourceGroup: a.ResourceGroup,
 	}
 

@@ -240,8 +240,7 @@ func TestReceive(t *testing.T) {
 		wantBody:    []byte(`{"key":"value"}`),
 		wantEventFn: func() *cloudevents.Event { return nil },
 		wantReportArgs: &ReportArgs{
-			EventSource: "source",
-			EventType:   "unit.testing",
+			EventType: "unit.testing",
 		},
 		wantReportCode: 200,
 	}, {
@@ -291,8 +290,7 @@ func TestReceive(t *testing.T) {
 		},
 		wantStatus: 200,
 		wantReportArgs: &ReportArgs{
-			EventSource: "source",
-			EventType:   "unit.testing",
+			EventType: "unit.testing",
 		},
 		wantReportCode: 200,
 	}, {
@@ -322,8 +320,7 @@ func TestReceive(t *testing.T) {
 		wantBody:    []byte(`{"key":"value"}`),
 		wantEventFn: func() *cloudevents.Event { return nil },
 		wantReportArgs: &ReportArgs{
-			EventSource: "source",
-			EventType:   "unit.testing",
+			EventType: "unit.testing",
 		},
 		wantReportCode: 500,
 		wantErr:        true,

@@ -25,7 +25,8 @@ import (
 	"knative.dev/pkg/apis/duck"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 	duckv1alpha1 "knative.dev/pkg/apis/duck/v1alpha1"
-	"knative.dev/pkg/webhook"
+	"knative.dev/pkg/kmeta"
+	"knative.dev/pkg/webhook/resourcesemantics"
 )
 
 // +genclient
@@ -46,12 +47,14 @@ type Topic struct {
 	Status TopicStatus `json:"status,omitempty"`
 }
 
-// Check that Topic can be validated, can be defaulted, and has immutable fields.
-var _ runtime.Object = (*Topic)(nil)
-var _ webhook.GenericCRD = (*Topic)(nil)
-
-// Check that Topic implements the Conditions duck type.
-var _ = duck.VerifyType(&Topic{}, &duckv1.Conditions{})
+var (
+	_ apis.Validatable             = (*Topic)(nil)
+	_ apis.Defaultable             = (*Topic)(nil)
+	_ runtime.Object               = (*Topic)(nil)
+	_ kmeta.OwnerRefable           = (*Topic)(nil)
+	_ resourcesemantics.GenericCRD = (*Topic)(nil)
+	_                              = duck.VerifyType(&Topic{}, &duckv1.Conditions{})
+)
 
 // TopicSpec defines parameters for creating or publishing to a Cloud Pub/Sub
 // Topic depending on the PropagationPolicy.

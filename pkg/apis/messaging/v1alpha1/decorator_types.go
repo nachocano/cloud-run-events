@@ -21,8 +21,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"knative.dev/pkg/apis"
+	"knative.dev/pkg/apis/duck"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
-	"knative.dev/pkg/webhook"
+	"knative.dev/pkg/kmeta"
+	"knative.dev/pkg/webhook/resourcesemantics"
 )
 
 // +genclient
@@ -44,11 +46,14 @@ type Decorator struct {
 	Status DecoratorStatus `json:"status,omitempty"`
 }
 
-// Check that Channel can be validated, can be defaulted, and has immutable fields.
-var _ apis.Validatable = (*Decorator)(nil)
-var _ apis.Defaultable = (*Decorator)(nil)
-var _ runtime.Object = (*Decorator)(nil)
-var _ webhook.GenericCRD = (*Decorator)(nil)
+var (
+	_ apis.Validatable             = (*Decorator)(nil)
+	_ apis.Defaultable             = (*Decorator)(nil)
+	_ runtime.Object               = (*Decorator)(nil)
+	_ kmeta.OwnerRefable           = (*Decorator)(nil)
+	_ resourcesemantics.GenericCRD = (*Decorator)(nil)
+	_                              = duck.VerifyType(&Decorator{}, &duckv1.Conditions{})
+)
 
 // DecoratorSpec
 type DecoratorSpec struct {
