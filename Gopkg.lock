@@ -160,14 +160,6 @@
   version = "v1.0.0"
 
 [[projects]]
-  digest = "1:fcd8ddc48ce648d5fbb36029fe3dd98f29c03377eea5c4a3c436701b0e3f2774"
-  name = "github.com/gobuffalo/envy"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "909ea676d4c90832fefbf55a5a4fb04d8bef8931"
-  version = "v1.7.1"
-
-[[projects]]
   digest = "1:633dde05baa7afd3544cfe4ac16fe3c5450b868cfc6b1558621ee39ebf2273ea"
   name = "github.com/gogo/protobuf"
   packages = [
@@ -320,14 +312,6 @@
   revision = "c2b33e84"
 
 [[projects]]
-  digest = "1:da62aa6632d04e080b8a8b85a59ed9ed1550842a0099a55f3ae3a20d02a3745a"
-  name = "github.com/joho/godotenv"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "23d116af351c84513e1946b527c88823e476be13"
-  version = "v1.3.0"
-
-[[projects]]
   digest = "1:92f6419f388bd31a433b1388910f15a882c9980e383e89ebf8fb2524583707ac"
   name = "github.com/json-iterator/go"
   packages = ["."]
@@ -354,14 +338,6 @@
   ]
   pruneopts = "NUT"
   revision = "efd84ab4db439838cce1b8a5f7dba45ce24cfe47"
-
-[[projects]]
-  digest = "1:56dbf15e091bf7926cb33a57cb6bdfc658fc6d3498d2f76f10a97ce7856f1fde"
-  name = "github.com/markbates/inflect"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "24b83195037b3bc61fcda2d28b7b0518bce293b6"
-  version = "v1.0.4"
 
 [[projects]]
   branch = "master"
@@ -471,13 +447,9 @@
   version = "v3.0.0"
 
 [[projects]]
-  digest = "1:e09ada96a5a41deda4748b1659cc8953961799e798aea557257b56baee4ecaf3"
+  digest = "1:7008ec21a0ce773bd21deefdb7d17fab8cb9f1ae0bc44026cdd2b658ab1582ca"
   name = "github.com/rogpeppe/go-internal"
-  packages = [
-    "modfile",
-    "module",
-    "semver",
-  ]
+  packages = ["semver"]
   pruneopts = "NUT"
   revision = "4bb227c59b1edd467deba87d2149d80915c0bed7"
   version = "v1.4.0"
@@ -1237,8 +1209,8 @@
   revision = "6046331ad7aab2fd082ae047bbe4201106a56b91"
 
 [[projects]]
-  branch = "release-0.10"
-  digest = "1:60eb83b6db703546cbddab378c2e8675237726dba71f883feeaec6ad45ba0659"
+  branch = "internal_metrics"
+  digest = "1:0b118a2efdeed57e428122bbc4e43e04e93d0229a38b47dbfc8f622aef3539f2"
   name = "knative.dev/pkg"
   packages = [
     "apis",
@@ -1307,9 +1279,11 @@
     "tracker",
     "version",
     "webhook",
+    "webhook/certificates/resources",
   ]
   pruneopts = "T"
-  revision = "2a3fc371d3266d59a0ae7e29a724ccc9a0550793"
+  revision = "4edd04e15e5729f404d73e843ae12aa17ee93285"
+  source = "github.com/nachocano/pkg"
 
 [[projects]]
   branch = "master"

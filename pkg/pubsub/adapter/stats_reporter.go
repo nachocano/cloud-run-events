@@ -41,10 +41,11 @@ var (
 	// go.opencensus.io/tag/validate.go. Currently those restrictions are:
 	// - length between 1 and 255 inclusive
 	// - characters are printable US-ASCII
-	namespaceKey         = tag.MustNewKey(metricskey.LabelNamespaceName)
-	eventSourceKey       = tag.MustNewKey(metricskey.LabelEventSource)
-	eventTypeKey         = tag.MustNewKey(metricskey.LabelEventType)
-	nameKey              = tag.MustNewKey(metricskey.LabelName)
+	namespaceKey = tag.MustNewKey(metricskey.LabelNamespaceName)
+	eventTypeKey = tag.MustNewKey(metricskey.LabelEventType)
+	sourceKey    = tag.MustNewKey(metricskey.LabelSourceName)
+	// TODO we need to differentiate between channel and source.
+	nameKey              = tag.MustNewKey("name")
 	resourceGroupKey     = tag.MustNewKey(metricskey.LabelResourceGroup)
 	responseCodeKey      = tag.MustNewKey(metricskey.LabelResponseCode)
 	responseCodeClassKey = tag.MustNewKey(metricskey.LabelResponseCodeClass)
@@ -53,7 +54,6 @@ var (
 type ReportArgs struct {
 	Namespace     string
 	EventType     string
-	EventSource   string
 	Name          string
 	ResourceGroup string
 }
@@ -92,7 +92,6 @@ func (r *reporter) generateTag(args *ReportArgs, responseCode int) (context.Cont
 	return tag.New(
 		emptyContext,
 		tag.Insert(namespaceKey, args.Namespace),
-		tag.Insert(eventSourceKey, args.EventSource),
 		tag.Insert(eventTypeKey, args.EventType),
 		tag.Insert(nameKey, args.Name),
 		tag.Insert(resourceGroupKey, args.ResourceGroup),
@@ -103,7 +102,6 @@ func (r *reporter) generateTag(args *ReportArgs, responseCode int) (context.Cont
 func register() {
 	tagKeys := []tag.Key{
 		namespaceKey,
-		eventSourceKey,
 		eventTypeKey,
 		nameKey,
 		resourceGroupKey,

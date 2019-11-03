@@ -18,129 +18,80 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"log"
-
-	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-	"knative.dev/pkg/configmap"
-	"knative.dev/pkg/logging"
-	"knative.dev/pkg/signals"
-	"knative.dev/pkg/system"
-	"knative.dev/pkg/version"
-	"knative.dev/pkg/webhook"
 
 	eventsv1alpha1 "github.com/google/knative-gcp/pkg/apis/events/v1alpha1"
 	messagingv1alpha1 "github.com/google/knative-gcp/pkg/apis/messaging/v1alpha1"
 	pubsubv1alpha1 "github.com/google/knative-gcp/pkg/apis/pubsub/v1alpha1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"knative.dev/pkg/configmap"
+	"knative.dev/pkg/controller"
+	"knative.dev/pkg/injection/sharedmain"
+	"knative.dev/pkg/logging"
+	"knative.dev/pkg/signals"
+	"knative.dev/pkg/system"
+	"knative.dev/pkg/webhook"
+	"knative.dev/pkg/webhook/certificates"
+	"knative.dev/pkg/webhook/resourcesemantics"
 )
 
 const (
 	component = "webhook"
 )
 
-var (
-	masterURL  = flag.String("master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
-	kubeconfig = flag.String("kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
-)
-
-func SharedMain(resourceHandlers map[schema.GroupVersionKind]webhook.GenericCRD) {
-
-	flag.Parse()
-	cm, err := configmap.Load("/etc/config-logging")
-	if err != nil {
-		log.Fatal("Error loading logging configuration:", err)
-	}
-	config, err := logging.NewConfigFromMap(cm)
-	if err != nil {
-		log.Fatal("Error parsing logging configuration:", err)
-	}
-	logger, atomicLevel := logging.NewLoggerFromConfig(config, component)
-	defer logger.Sync()
-	logger = logger.With(zap.String("cloud.google.com/events", component))
-
-	logger.Info("Starting the Cloud Run Events Webhook")
-
-	// Set up signals so we handle the first shutdown signal gracefully.
-	ctx := signals.NewContext()
-
-	clusterConfig, err := clientcmd.BuildConfigFromFlags(*masterURL, *kubeconfig)
-	if err != nil {
-		logger.Fatalw("Failed to get cluster config", zap.Error(err))
-	}
-
-	kubeClient, err := kubernetes.NewForConfig(clusterConfig)
-	if err != nil {
-		logger.Fatalw("Failed to get the client set", zap.Error(err))
-	}
-
-	if err := version.CheckMinimumVersion(kubeClient.Discovery()); err != nil {
-		logger.Fatalw("Version check failed", err)
-	}
-
-	// Watch the logging config map and dynamically update logging levels.
-	configMapWatcher := configmap.NewInformedWatcher(kubeClient, system.Namespace())
-	configMapWatcher.Watch(logging.ConfigMapName(), logging.UpdateLevelFromConfigMap(logger, atomicLevel, component))
-
-	// // If you want to control Defaulting or Validation, you can attach config state
-	// // to the context by watching the configmap here, and then uncommenting the logic
-	// // below.
-	// stores := make([]Store, 0, len(factories))
-	// for _, sf := range factories {
-	// 	store := sf(logger)
-	// 	store.WatchConfigs(configMapWatcher)
-	// 	stores = append(stores, store)
-	// }
-
-	if err = configMapWatcher.Start(ctx.Done()); err != nil {
-		logger.Fatalw("Failed to start the ConfigMap watcher", zap.Error(err))
-	}
-
-	options := webhook.ControllerOptions{
-		ServiceName:                     "webhook",
-		DeploymentName:                  "webhook",
-		Namespace:                       system.Namespace(),
-		Port:                            8443,
-		SecretName:                      "webhook-certs",
-		ResourceMutatingWebhookName:     fmt.Sprintf("webhook.%s.events.cloud.google.com", system.Namespace()),
-		ResourceAdmissionControllerPath: "/",
-	}
+func NewResourceAdmissionController(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
+	logger := logging.FromContext(ctx)
 
 	// Decorate contexts with the current state of the config.
+	// store := defaultconfig.NewStore(logging.FromContext(ctx).Named("config-store"))
+	// store.WatchConfigs(cmw)
 	ctxFunc := func(ctx context.Context) context.Context {
-		// TODO: implement upgrades when eventing needs it:
-		//  return v1beta1.WithUpgradeViaDefaulting(store.ToContext(ctx))
+		// return v1.WithUpgradeViaDefaulting(store.ToContext(ctx))
 		return ctx
 	}
 
-	resourceAdmissionController := webhook.NewResourceAdmissionController(resourceHandlers, options, true)
-	admissionControllers := map[string]webhook.AdmissionController{
-		options.ResourceAdmissionControllerPath: resourceAdmissionController,
-	}
+	return resourcesemantics.NewAdmissionController(ctx,
 
-	controller, err := webhook.New(kubeClient, options, admissionControllers, logger, ctxFunc)
+		// Name of the resource webhook.
+		fmt.Sprintf("webhook.%s.events.cloud.google.com", system.Namespace()),
 
-	if err != nil {
-		logger.Fatalw("Failed to create admission controller", zap.Error(err))
-	}
+		// The path on which to serve the webhook.
+		"/",
 
-	if err = controller.Run(ctx.Done()); err != nil {
-		logger.Fatalw("Failed to start the admission controller", zap.Error(err))
-	}
+		// The resources to validate and default.
+		map[schema.GroupVersionKind]resourcesemantics.GenericCRD{
+			// For group messaging.cloud.google.com
+			messagingv1alpha1.SchemeGroupVersion.WithKind("Channel"):   &messagingv1alpha1.Channel{},
+			messagingv1alpha1.SchemeGroupVersion.WithKind("Decorator"): &messagingv1alpha1.Decorator{},
+
+			// For group events.cloud.google.com
+			eventsv1alpha1.SchemeGroupVersion.WithKind("Storage"):   &eventsv1alpha1.Storage{},
+			eventsv1alpha1.SchemeGroupVersion.WithKind("Scheduler"): &eventsv1alpha1.Scheduler{},
+			eventsv1alpha1.SchemeGroupVersion.WithKind("PubSub"):    &eventsv1alpha1.PubSub{},
+
+			// For group pubsub.cloud.google.com
+			pubsubv1alpha1.SchemeGroupVersion.WithKind("PullSubscription"): &pubsubv1alpha1.PullSubscription{},
+			pubsubv1alpha1.SchemeGroupVersion.WithKind("Topic"):            &pubsubv1alpha1.Topic{},
+		},
+
+		// A function that infuses the context passed to Validate/SetDefaults with custom metadata.
+		ctxFunc,
+
+		// Whether to disallow unknown fields.
+		true,
+	)
 }
 
 func main() {
-	handlers := map[schema.GroupVersionKind]webhook.GenericCRD{
-		messagingv1alpha1.SchemeGroupVersion.WithKind("Channel"):       &messagingv1alpha1.Channel{},
-		messagingv1alpha1.SchemeGroupVersion.WithKind("Decorator"):     &messagingv1alpha1.Decorator{},
-		eventsv1alpha1.SchemeGroupVersion.WithKind("Storage"):          &eventsv1alpha1.Storage{},
-		eventsv1alpha1.SchemeGroupVersion.WithKind("Scheduler"):        &eventsv1alpha1.Scheduler{},
-		eventsv1alpha1.SchemeGroupVersion.WithKind("PubSub"):           &eventsv1alpha1.PubSub{},
-		pubsubv1alpha1.SchemeGroupVersion.WithKind("PullSubscription"): &pubsubv1alpha1.PullSubscription{},
-		pubsubv1alpha1.SchemeGroupVersion.WithKind("Topic"):            &pubsubv1alpha1.Topic{},
-	}
-	SharedMain(handlers)
+	// Set up a signal context with our webhook options
+	ctx := webhook.WithOptions(signals.NewContext(), webhook.Options{
+		ServiceName: component,
+		Port:        8443,
+		SecretName:  "webhook-certs",
+	})
+
+	sharedmain.MainWithContext(ctx, component,
+		certificates.NewController,
+		NewResourceAdmissionController,
+	)
 }

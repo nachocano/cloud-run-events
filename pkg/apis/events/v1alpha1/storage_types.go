@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"fmt"
+	"knative.dev/pkg/apis/duck"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -25,8 +26,9 @@ import (
 
 	duckv1alpha1 "github.com/google/knative-gcp/pkg/apis/duck/v1alpha1"
 	"knative.dev/pkg/apis"
+	duckv1 "knative.dev/pkg/apis/duck/v1"
 	"knative.dev/pkg/kmeta"
-	"knative.dev/pkg/webhook"
+	"knative.dev/pkg/webhook/resourcesemantics"
 )
 
 // +genclient
@@ -42,11 +44,12 @@ type Storage struct {
 }
 
 var (
-	_ apis.Validatable   = (*Storage)(nil)
-	_ apis.Defaultable   = (*Storage)(nil)
-	_ runtime.Object     = (*Storage)(nil)
-	_ kmeta.OwnerRefable = (*Storage)(nil)
-	_ webhook.GenericCRD = (*Storage)(nil)
+	_ apis.Validatable             = (*Storage)(nil)
+	_ apis.Defaultable             = (*Storage)(nil)
+	_ runtime.Object               = (*Storage)(nil)
+	_ kmeta.OwnerRefable           = (*Storage)(nil)
+	_ resourcesemantics.GenericCRD = (*Storage)(nil)
+	_                              = duck.VerifyType(&Storage{}, &duckv1.Conditions{})
 )
 
 // StorageSpec is the spec for a Storage resource

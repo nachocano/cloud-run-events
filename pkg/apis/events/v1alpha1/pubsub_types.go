@@ -18,6 +18,8 @@ package v1alpha1
 
 import (
 	"fmt"
+	"knative.dev/pkg/kmeta"
+	"knative.dev/pkg/webhook/resourcesemantics"
 	"time"
 
 	duckv1alpha1 "github.com/google/knative-gcp/pkg/apis/duck/v1alpha1"
@@ -42,14 +44,15 @@ type PubSub struct {
 	Status PubSubStatus `json:"status,omitempty"`
 }
 
-// Check that PubSub can be validated and can be defaulted.
-var _ runtime.Object = (*PubSub)(nil)
-
-// Check that PubSub will be checked for immutable fields.
-var _ apis.Immutable = (*PubSub)(nil)
-
-// Check that PubSub implements the Conditions duck type.
-var _ = duck.VerifyType(&PubSub{}, &duckv1.Conditions{})
+var (
+	_ apis.Validatable             = (*PubSub)(nil)
+	_ apis.Defaultable             = (*PubSub)(nil)
+	_ runtime.Object               = (*PubSub)(nil)
+	_ kmeta.OwnerRefable           = (*PubSub)(nil)
+	_ resourcesemantics.GenericCRD = (*PubSub)(nil)
+	_ apis.Immutable               = (*PubSub)(nil)
+	_                              = duck.VerifyType(&PubSub{}, &duckv1.Conditions{})
+)
 
 // PubSubSpec defines the desired state of the PubSub.
 type PubSubSpec struct {
