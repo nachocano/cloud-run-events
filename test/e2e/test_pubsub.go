@@ -191,7 +191,6 @@ func PubSubWithTargetTestImpl(t *testing.T, packages map[string]string, assertMe
 			"resource.type":               globalMetricResourceType,
 			"metric.label.resource_group": pubsubResourceGroup,
 			"metric.label.event_type":     v1alpha1.PubSubPublish,
-			"metric.label.event_source":   v1alpha1.PubSubEventSource(projectID, topicName),
 			"metric.label.namespace_name": client.Namespace,
 			"metric.label.name":           psName,
 			// We exit the target image before sending a response, thus check for 500.

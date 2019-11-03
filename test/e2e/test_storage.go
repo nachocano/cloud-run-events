@@ -204,7 +204,6 @@ func StorageWithTestImpl(t *testing.T, packages map[string]string, assertMetrics
 			"resource.type":               globalMetricResourceType,
 			"metric.label.resource_group": storageResourceGroup,
 			"metric.label.event_type":     v1alpha1.StorageFinalize,
-			"metric.label.event_source":   v1alpha1.StorageEventSource(bucketName),
 			"metric.label.namespace_name": client.Namespace,
 			"metric.label.name":           storageName,
 			// We exit the target image before sending a response, thus check for 500.
