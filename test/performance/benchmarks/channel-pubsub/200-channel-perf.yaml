@@ -37,7 +37,8 @@ spec:
           - "--roles=sender,receiver"
           - "--sink=http://cre-pubsub-test-channel-chan-publish.default.svc.cluster.local"
           - "--aggregator=channel-perf-aggregator:10000"
-          - "--pace=100:10,200:20,400:30,500:60,600:60,700:60"
+          - "--pace=1000:60"
+          # - "--pace=100:10,200:20,400:30,500:60,600:60,700:60"
         env:
           - name: GOGC
             value: "off"
