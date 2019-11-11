@@ -40,8 +40,13 @@ const (
 	// Constants for the underlying HTTP Client transport. These would enable better connection reuse.
 	// These are magic numbers, partly set based on empirical evidence running performance workloads, and partly
 	// based on what serving is doing. See https://github.com/knative/serving/blob/master/pkg/network/transports.go.
-	defaultMaxIdleConnections        = 1000
-	defaultMaxIdleConnectionsPerHost = 100
+	defaultHttpMaxIdleConnections        = 1000
+	defaultHttpMaxIdleConnectionsPerHost = 100
+	// Constants for the underlying PubSub Client transport. These would enable better throughput.
+	// As with the above constants, these are also magic numbers, partly set based on empirical evidence running
+	// performance workloads.
+	defaultPubSubMaxOutstandingMessages = 1000
+	defaultPubSubNumGoRoutines          = 100
 )
 
 var (
@@ -249,6 +254,8 @@ func (a *Adapter) newPubSubClient(ctx context.Context) (cloudevents.Client, erro
 		cepubsub.WithProjectID(a.Project),
 		cepubsub.WithTopicID(a.Topic),
 		cepubsub.WithSubscriptionAndTopicID(a.Subscription, a.Topic),
+		cepubsub.NumGoRoutines(defaultPubSubNumGoRoutines),
+		cepubsub.MaxOutstandingMessages(defaultPubSubMaxOutstandingMessages),
 	}
 
 	// Make a pubsub transport for the CloudEvents client.
@@ -277,8 +284,8 @@ func (a *Adapter) newHTTPClient(ctx context.Context, target string) (cloudevents
 
 	// Setup connection arguments.
 	connectionArgs := kncloudevents.ConnectionArgs{
-		MaxIdleConns:        defaultMaxIdleConnections,
-		MaxIdleConnsPerHost: defaultMaxIdleConnectionsPerHost,
+		MaxIdleConns:        defaultHttpMaxIdleConnections,
+		MaxIdleConnsPerHost: defaultHttpMaxIdleConnectionsPerHost,
 	}
 
 	// Make an http transport for the CloudEvents client.
