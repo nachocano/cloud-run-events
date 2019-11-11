@@ -124,4 +124,7 @@ spec:
     kind: Channel
     name: pubsub-test-channel
   subscriber:
-    uri: "http://channel-perf-consumer.default.svc.cluster.local"
+    ref:
+      apiVersion: v1
+      kind: Service
+      name: channel-perf-consumer
