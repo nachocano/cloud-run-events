@@ -254,8 +254,8 @@ func (a *Adapter) newPubSubClient(ctx context.Context) (cloudevents.Client, erro
 		cepubsub.WithProjectID(a.Project),
 		cepubsub.WithTopicID(a.Topic),
 		cepubsub.WithSubscriptionAndTopicID(a.Subscription, a.Topic),
-		cepubsub.NumGoRoutines(defaultPubSubNumGoRoutines),
-		cepubsub.MaxOutstandingMessages(defaultPubSubMaxOutstandingMessages),
+		//cepubsub.NumGoRoutines(defaultPubSubNumGoRoutines),
+		//cepubsub.MaxOutstandingMessages(defaultPubSubMaxOutstandingMessages),
 	}
 
 	// Make a pubsub transport for the CloudEvents client.
