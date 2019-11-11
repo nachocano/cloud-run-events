@@ -29,7 +29,15 @@ func NewDefaultClient(target ...string) (cloudevents.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewDefaultClientGivenHttpTransport(t)
+	// Use the transport to make a new CloudEvents client.
+	c, err := cloudevents.NewClient(t,
+		cloudevents.WithUUIDs(),
+		cloudevents.WithTimeNow(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 // NewDefaultClientGivenHttpTransport creates a new CloudEvents client using the provided cloudevents HTTP
@@ -52,11 +60,7 @@ func NewDefaultClientGivenHttpTransport(t *cloudevents.HTTPTransport, connection
 	}
 
 	// Use the transport to make a new CloudEvents client.
-	c, err := cloudevents.NewClient(t,
-		cloudevents.WithUUIDs(),
-		cloudevents.WithTimeNow(),
-	)
-
+	c, err := cloudevents.NewClient(t)
 	if err != nil {
 		return nil, err
 	}
