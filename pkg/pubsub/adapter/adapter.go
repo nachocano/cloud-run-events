@@ -46,7 +46,7 @@ const (
 	// As with the above constants, these are also magic numbers, partly set based on empirical evidence running
 	// performance workloads.
 	defaultPubSubMaxOutstandingMessages = 1000
-	defaultPubSubNumGoRoutines          = 100
+	defaultPubSubNumGoRoutines          = 10
 )
 
 var (
@@ -254,7 +254,7 @@ func (a *Adapter) newPubSubClient(ctx context.Context) (cloudevents.Client, erro
 		cepubsub.WithProjectID(a.Project),
 		cepubsub.WithTopicID(a.Topic),
 		cepubsub.WithSubscriptionAndTopicID(a.Subscription, a.Topic),
-		//cepubsub.NumGoRoutines(defaultPubSubNumGoRoutines),
+		cepubsub.NumGoRoutines(defaultPubSubNumGoRoutines),
 		//cepubsub.MaxOutstandingMessages(defaultPubSubMaxOutstandingMessages),
 	}
 
