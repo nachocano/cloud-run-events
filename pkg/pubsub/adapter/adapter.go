@@ -20,11 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"go.opencensus.io/trace"
-
-	"go.opencensus.io/plugin/ochttp"
-	"go.opencensus.io/plugin/ochttp/propagation/b3"
-
 	nethttp "net/http"
 
 	cloudevents "github.com/cloudevents/sdk-go"
@@ -34,10 +29,19 @@ import (
 	"github.com/google/knative-gcp/pkg/kncloudevents"
 	"github.com/google/knative-gcp/pkg/pubsub/adapter/converters"
 	decoratorresources "github.com/google/knative-gcp/pkg/reconciler/decorator/resources"
+	"go.opencensus.io/trace"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"knative.dev/eventing/pkg/tracing"
 	"knative.dev/pkg/logging"
+)
+
+const (
+	// Constants for the underlying HTTP Client transport. These would enable better connection reuse.
+	// These are magic numbers, partly set based on empirical evidence running performance workloads, and partly
+	// based on what serving is doing. See https://github.com/knative/serving/blob/master/pkg/network/transports.go.
+	defaultMaxIdleConnections        = 1000
+	defaultMaxIdleConnectionsPerHost = 100
 )
 
 var (
@@ -271,19 +275,17 @@ func (a *Adapter) newHTTPClient(ctx context.Context, target string) (cloudevents
 		tOpts = append(tOpts, cloudevents.WithStructuredEncoding())
 	}
 
+	// Setup connection arguments.
+	connectionArgs := kncloudevents.ConnectionArgs{
+		MaxIdleConns:        defaultMaxIdleConnections,
+		MaxIdleConnsPerHost: defaultMaxIdleConnectionsPerHost,
+	}
+
 	// Make an http transport for the CloudEvents client.
 	t, err := cloudevents.NewHTTPTransport(tOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	// Add output tracing.
-	t.Client = &nethttp.Client{
-		Transport: &ochttp.Transport{
-			Propagation: &b3.HTTPFormat{},
-		},
-	}
-
-	// Use the transport to make a new CloudEvents client.
-	return cloudevents.NewClient(t)
+	return kncloudevents.NewDefaultClientGivenHttpTransport(t, connectionArgs)
 }
