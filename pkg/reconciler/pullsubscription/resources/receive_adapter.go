@@ -93,7 +93,7 @@ func MakeReceiveAdapter(ctx context.Context, args *ReceiveAdapterArgs) *v1.Deplo
 	}
 
 	credsFile := fmt.Sprintf("%s/%s", credsMountPath, secret.Key)
-	replicas := int32(1)
+	replicas := int32(5)
 	return &v1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       args.Source.Namespace,
