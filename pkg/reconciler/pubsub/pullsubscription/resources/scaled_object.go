@@ -65,7 +65,7 @@ func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullS
 					"metadata": map[string]interface{}{
 						"subscriptionSize": "5",
 						"subscriptionName": ps.Status.SubscriptionID,
-						"credentials":      "GOOGLE_APPLICATION_CREDENTIALS",
+						"credentials":      "GOOGLE_APPLICATION_CREDENTIALS_JSON",
 					},
 				}},
 			},
