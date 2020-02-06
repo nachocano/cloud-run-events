@@ -229,3 +229,8 @@ type PullSubscriptionList struct {
 func (s *PullSubscription) GetGroupVersionKind() schema.GroupVersionKind {
 	return SchemeGroupVersion.WithKind("PullSubscription")
 }
+
+// GetGroupVersionKind returns the GroupVersion.
+func (s *PullSubscription) GetGroupVersion() schema.GroupVersion {
+	return SchemeGroupVersion
+}
