@@ -33,14 +33,14 @@ var (
 	}
 )
 
-func MakeScaledObject(ctx context.Context, ra *v1.Deployment, subscription *v1alpha1.PullSubscription) *unstructured.Unstructured {
+func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullSubscription) *unstructured.Unstructured {
 	var minReplicaCount int32 = 0
-	if subscription.Spec.MinReplicaCount != nil {
-		minReplicaCount = *subscription.Spec.MinReplicaCount
+	if ps.Spec.MinReplicaCount != nil {
+		minReplicaCount = *ps.Spec.MinReplicaCount
 	}
 	var maxReplicateCount int32 = 1
-	if subscription.Spec.MaxReplicaCount != nil {
-		maxReplicateCount = *subscription.Spec.MaxReplicaCount
+	if ps.Spec.MaxReplicaCount != nil {
+		maxReplicateCount = *ps.Spec.MaxReplicaCount
 	}
 
 	so := &unstructured.Unstructured{
@@ -48,8 +48,8 @@ func MakeScaledObject(ctx context.Context, ra *v1.Deployment, subscription *v1al
 			"apiVersion": "keda.k8s.io/v1alpha1",
 			"kind":       "ScaledObject",
 			"metadata": map[string]interface{}{
-				"namespace": subscription.Namespace,
-				"name":      subscription.Name,
+				"namespace": ps.Namespace,
+				"name":      ps.Name,
 				"labels": map[string]interface{}{
 					"deploymentName": ra.Name,
 				},
@@ -64,8 +64,8 @@ func MakeScaledObject(ctx context.Context, ra *v1.Deployment, subscription *v1al
 					"type": "gcp-pubsub",
 					"metadata": map[string]interface{}{
 						"subscriptionSize": "5",
-						"subscriptionName": subscription.Status.SubscriptionID,
-						"credentials":      "GOOGLE_APPLICATION_CREDENTIALS",
+						"subscriptionName": ps.Status.SubscriptionID,
+						"credentials":      ps.Spec.Secret.Key,
 					},
 				}},
 			},
