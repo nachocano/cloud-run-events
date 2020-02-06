@@ -31,7 +31,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -205,12 +207,18 @@ func (r *Reconciler) reconcile(ctx context.Context, ps *v1alpha1.PullSubscriptio
 	}
 	ps.Status.MarkSubscribed(subscriptionID)
 
-	_, err = r.reconcileReceiveAdapter(ctx, ps)
+	ra, err := r.reconcileReceiveAdapter(ctx, ps)
 	if err != nil {
 		ps.Status.MarkNotDeployed("AdapterReconcileFailed", "Failed to reconcile Receive Adapter: %s", err.Error())
 		return err
 	}
 	ps.Status.MarkDeployed()
+
+	_, err = r.reconcileScaledObject(ctx, ra, ps)
+	if err != nil {
+		// TODO add own condition
+		ps.Status.MarkNotDeployed("ScaledObjectReconcileFailed", "Failed to reconcile Scaled Object: %s", err.Error())
+	}
 
 	return nil
 }
@@ -516,6 +524,29 @@ func (r *Reconciler) getReceiveAdapter(ctx context.Context, src *v1alpha1.PullSu
 		}
 	}
 	return nil, apierrors.NewNotFound(schema.GroupResource{}, "")
+}
+
+func (r *Reconciler) reconcileScaledObject(ctx context.Context, ra *appsv1.Deployment, src *v1alpha1.PullSubscription) (*unstructured.Unstructured, error) {
+	gvr, _ := meta.UnsafeGuessKindToResource(resources.ScaledObjectGVK)
+	scaledObjectResourceInterface := r.DynamicClientSet.Resource(gvr).Namespace(src.Namespace)
+	if scaledObjectResourceInterface == nil {
+		return nil, fmt.Errorf("unable to create dynamic client for ScaledObject")
+	}
+
+	so := resources.MakeScaledObject(ctx, ra, src)
+	existing, err := scaledObjectResourceInterface.Get(so.GetName(), metav1.GetOptions{})
+	if err != nil {
+		if apierrs.IsNotFound(err) {
+			existing, err = scaledObjectResourceInterface.Create(so, metav1.CreateOptions{})
+			if err != nil {
+				logging.FromContext(ctx).Error("Failed to create ScaledObject", zap.Any("so", so), zap.Error(err))
+				return nil, err
+			}
+		} else {
+			logging.FromContext(ctx).Error("Failed to get ScaledObject", zap.Any("so", so), zap.Error(err))
+		}
+	}
+	return existing, nil
 }
 
 func (r *Reconciler) UpdateFromLoggingConfigMap(cfg *corev1.ConfigMap) {

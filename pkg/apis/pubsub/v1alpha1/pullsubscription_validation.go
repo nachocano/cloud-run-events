@@ -88,6 +88,8 @@ func (current *PullSubscriptionSpec) Validate(ctx context.Context) *apis.FieldEr
 		errs = errs.Also(apis.ErrInvalidValue(current.Mode, "mode"))
 	}
 
+	// TODO validate min and max replica count
+
 	return errs
 }
 
