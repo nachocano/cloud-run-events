@@ -58,18 +58,18 @@ type SourceSpec struct {
 	CloudEventOverrides *CloudEventOverrides `json:"ceOverrides,omitempty"`
 
 	// + optional
-	ScalingSpec *ScalingSpec `json:"scalingSpec,omitempty"`
+	ScalerSpec *ScalerSpec `json:"scalerSpec,omitempty"`
 }
 
-type ScalingSpec struct {
+type ScalerSpec struct {
 	// +optional
-	MinScale *int32 `json:"minReplicaCount,omitempty"`
+	MinScale *int32 `json:"minScale,omitempty"`
 
 	// +optional
-	MaxScale *int32 `json:"maxReplicaCount,omitempty"`
+	MaxScale *int32 `json:"maxScale,omitempty"`
 
 	// +optional
-	Knobs *KReference `json:"knobs,omitempty"`
+	Options map[string]string `json:"options,omitempty"`
 }
 
 // CloudEventOverrides defines arguments for a Source that control the output
