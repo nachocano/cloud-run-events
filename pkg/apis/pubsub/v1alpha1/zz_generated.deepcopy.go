@@ -134,16 +134,6 @@ func (in *PullSubscriptionSpec) DeepCopyInto(out *PullSubscriptionSpec) {
 		*out = new(duckv1.Destination)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.MinReplicaCount != nil {
-		in, out := &in.MinReplicaCount, &out.MinReplicaCount
-		*out = new(int32)
-		**out = **in
-	}
-	if in.MaxReplicaCount != nil {
-		in, out := &in.MaxReplicaCount, &out.MaxReplicaCount
-		*out = new(int32)
-		**out = **in
-	}
 	return
 }
 

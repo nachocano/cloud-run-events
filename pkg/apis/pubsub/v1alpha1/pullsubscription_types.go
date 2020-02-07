@@ -107,12 +107,6 @@ type PullSubscriptionSpec struct {
 	// PullSubscription uses.
 	// +optional
 	AdapterType string `json:"adapterType,omitempty"`
-
-	// +optional
-	MinReplicaCount *int32 `json:"minReplicaCount,omitempty"`
-
-	// +optional
-	MaxReplicaCount *int32 `json:"maxReplicaCount,omitempty"`
 }
 
 // CloudEventOverrides defines arguments for a Source that control the output

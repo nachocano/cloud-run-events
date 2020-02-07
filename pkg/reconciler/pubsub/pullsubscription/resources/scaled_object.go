@@ -34,14 +34,19 @@ var (
 )
 
 func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullSubscription) *unstructured.Unstructured {
-	var minReplicaCount int32 = 0
-	if ps.Spec.MinReplicaCount != nil {
-		minReplicaCount = *ps.Spec.MinReplicaCount
-	}
+	// TODO validation and defaulting in the webhook
+	var minReplicaCount int32 = 1
 	var maxReplicateCount int32 = 1
-	if ps.Spec.MaxReplicaCount != nil {
-		maxReplicateCount = *ps.Spec.MaxReplicaCount
+	if scalingSpec := ps.Spec.SourceSpec.ScalingSpec; scalingSpec != nil {
+		if scalingSpec.MinScale != nil {
+			minReplicaCount = *scalingSpec.MinScale
+		}
+		if scalingSpec.MaxScale != nil {
+			maxReplicateCount = *scalingSpec.MaxScale
+		}
 	}
+
+	// TODO read config map with options...
 
 	so := &unstructured.Unstructured{
 		Object: map[string]interface{}{
