@@ -207,18 +207,11 @@ func (r *Reconciler) reconcile(ctx context.Context, ps *v1alpha1.PullSubscriptio
 	}
 	ps.Status.MarkSubscribed(subscriptionID)
 
-	ra, err := r.reconcileReceiveAdapter(ctx, ps)
+	err = r.reconcileDataPlaneResources(ctx, ps)
 	if err != nil {
-		ps.Status.MarkNotDeployed("AdapterReconcileFailed", "Failed to reconcile Receive Adapter: %s", err.Error())
-		return err
+		ps.Status.MarkNotDeployed("DataPlaneReconcileFailed", "Failed to reconcile Data Plane resource(s): %s", err.Error())
 	}
 	ps.Status.MarkDeployed()
-
-	_, err = r.reconcileScaledObject(ctx, ra, ps)
-	if err != nil {
-		// TODO add own condition
-		ps.Status.MarkNotDeployed("ScaledObjectReconcileFailed", "Failed to reconcile Scaled Object: %s", err.Error())
-	}
 
 	return nil
 }
@@ -440,6 +433,11 @@ func removeFinalizer(s *v1alpha1.PullSubscription) {
 	finalizers := sets.NewString(s.Finalizers...)
 	finalizers.Delete(finalizerName)
 	s.Finalizers = finalizers.List()
+}
+
+func (r *Reconciler) reconcileDataPlaneResources(ctx context.Context, src *v1alpha1.PullSubscription) error {
+	// TODO call helpers, re-structure
+	return nil
 }
 
 func (r *Reconciler) reconcileReceiveAdapter(ctx context.Context, src *v1alpha1.PullSubscription) (*appsv1.Deployment, error) {

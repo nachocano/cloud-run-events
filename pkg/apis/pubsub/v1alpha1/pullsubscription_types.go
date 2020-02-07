@@ -170,7 +170,7 @@ const (
 	PullSubscriptionConditionSinkProvided apis.ConditionType = "SinkProvided"
 
 	// PullSubscriptionConditionDeployed has status True when the PullSubscription has
-	// had its receive adapter deployment created.
+	// had its data plane resource(s) created.
 	PullSubscriptionConditionDeployed apis.ConditionType = "Deployed"
 
 	// PullSubscriptionConditionSubscribed has status True when a Google Cloud
