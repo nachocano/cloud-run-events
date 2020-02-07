@@ -88,7 +88,17 @@ func (current *PullSubscriptionSpec) Validate(ctx context.Context) *apis.FieldEr
 		errs = errs.Also(apis.ErrInvalidValue(current.Mode, "mode"))
 	}
 
-	// TODO validate min and max replica count
+	if scalerSpec := current.ScalerSpec; scalerSpec != nil {
+		if *scalerSpec.MinScale < 0 {
+			errs = errs.Also(apis.ErrInvalidValue(*scalerSpec.MinScale, "scalerSpec.minScale"))
+		}
+		if *scalerSpec.MaxScale < 1 {
+			errs = errs.Also(apis.ErrInvalidValue(*scalerSpec.MaxScale, "scalerSpec.maxScale"))
+		}
+		if *scalerSpec.MinScale > *scalerSpec.MaxScale {
+			errs = errs.Also(apis.ErrInvalidValue(*scalerSpec.MaxScale, "scalerSpec.minScale"))
+		}
+	}
 
 	return errs
 }

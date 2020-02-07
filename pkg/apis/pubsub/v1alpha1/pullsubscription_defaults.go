@@ -29,6 +29,12 @@ import (
 const (
 	defaultRetentionDuration = 7 * 24 * time.Hour
 	defaultAckDeadline       = 30 * time.Second
+	defaultSubscriptionSize  = "5"
+)
+
+var (
+	defaultMinScale int32 = 0
+	defaultMaxScale int32 = 1
 )
 
 func (s *PullSubscription) SetDefaults(ctx context.Context) {
@@ -56,5 +62,17 @@ func (ss *PullSubscriptionSpec) SetDefaults(ctx context.Context) {
 	default:
 		// Default is CloudEvents Binary Mode.
 		ss.Mode = ModeCloudEventsBinary
+	}
+
+	if scalerSpec := ss.ScalerSpec; scalerSpec != nil {
+		if scalerSpec.MinScale == nil {
+			scalerSpec.MinScale = &defaultMinScale
+		}
+		if scalerSpec.MaxScale == nil {
+			scalerSpec.MaxScale = &defaultMaxScale
+		}
+		if scalerSpec.Options == nil || len(scalerSpec.Options) == 0 {
+			scalerSpec.Options = map[string]string{SubscriptionSize: defaultSubscriptionSize}
+		}
 	}
 }

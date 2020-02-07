@@ -34,20 +34,6 @@ var (
 )
 
 func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullSubscription) *unstructured.Unstructured {
-	// TODO validation and defaulting in the webhook
-	var minReplicaCount int32 = 1
-	var maxReplicateCount int32 = 1
-	if scalingSpec := ps.Spec.SourceSpec.ScalingSpec; scalingSpec != nil {
-		if scalingSpec.MinScale != nil {
-			minReplicaCount = *scalingSpec.MinScale
-		}
-		if scalingSpec.MaxScale != nil {
-			maxReplicateCount = *scalingSpec.MaxScale
-		}
-	}
-
-	// TODO read config map with options...
-
 	so := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "keda.k8s.io/v1alpha1",
@@ -70,12 +56,12 @@ func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullS
 				"scaleTargetRef": map[string]interface{}{
 					"deploymentName": ra.Name,
 				},
-				"minReplicaCount": minReplicaCount,
-				"maxReplicaCount": maxReplicateCount,
+				"minReplicaCount": *ps.Spec.SourceSpec.ScalerSpec.MinScale,
+				"maxReplicaCount": *ps.Spec.SourceSpec.ScalerSpec.MaxScale,
 				"triggers": []map[string]interface{}{{
 					"type": "gcp-pubsub",
 					"metadata": map[string]interface{}{
-						"subscriptionSize": "5",
+						"subscriptionSize": ps.Spec.SourceSpec.ScalerSpec.Options[v1alpha1.SubscriptionSize],
 						"subscriptionName": ps.Status.SubscriptionID,
 						"credentials":      "GOOGLE_APPLICATION_CREDENTIALS_JSON",
 					},

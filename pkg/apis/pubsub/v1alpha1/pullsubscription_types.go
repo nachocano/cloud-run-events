@@ -156,6 +156,11 @@ const (
 )
 
 const (
+	// Scaling options
+	SubscriptionSize = "subscriptionSize"
+)
+
+const (
 	// PullSubscriptionConditionReady has status True when the PullSubscription is
 	// ready to send events.
 	PullSubscriptionConditionReady = apis.ConditionReady
