@@ -56,6 +56,20 @@ type SourceSpec struct {
 	// modifications of the event sent to the sink.
 	// +optional
 	CloudEventOverrides *CloudEventOverrides `json:"ceOverrides,omitempty"`
+
+	// + optional
+	ScalingSpec *ScalingSpec `json:"scalingSpec,omitempty"`
+}
+
+type ScalingSpec struct {
+	// +optional
+	MinScale *int32 `json:"minReplicaCount,omitempty"`
+
+	// +optional
+	MaxScale *int32 `json:"maxReplicaCount,omitempty"`
+
+	// +optional
+	Knobs *KReference `json:"knobs,omitempty"`
 }
 
 // CloudEventOverrides defines arguments for a Source that control the output
