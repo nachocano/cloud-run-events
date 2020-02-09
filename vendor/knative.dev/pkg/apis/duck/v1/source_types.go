@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilpointer "k8s.io/utils/pointer"
 
 	"knative.dev/pkg/apis"
 	"knative.dev/pkg/apis/duck"
@@ -57,17 +58,27 @@ type SourceSpec struct {
 	// +optional
 	CloudEventOverrides *CloudEventOverrides `json:"ceOverrides,omitempty"`
 
+	// ScalerSpec defines the scaling options for the source, e.g., whether it can
+	// scale to zero, the maximum number of pods it can scale to, as well as particular
+	// options based on the scaling technology used.
+	// If not specified, the source is non-scalable.
 	// + optional
 	ScalerSpec *ScalerSpec `json:"scalerSpec,omitempty"`
 }
 
 type ScalerSpec struct {
+	// MinScale defines the minimum scale for the source.
+	// If not specified, defaults to zero.
 	// +optional
 	MinScale *int32 `json:"minScale,omitempty"`
 
+	// MaxScale defines the maximum scale for the source.
+	// If not specified, defaults to one.
 	// +optional
 	MaxScale *int32 `json:"maxScale,omitempty"`
 
+	// Options defines specific knobs to tune based on the
+	// particular scaling backend (e.g., KEDA or Kn Service)
 	// +optional
 	Options map[string]string `json:"options,omitempty"`
 }
@@ -121,6 +132,10 @@ const (
 	// SourceConditionSinkProvided has status True when the Source
 	// has been configured with a sink target that is resolvable.
 	SourceConditionSinkProvided apis.ConditionType = "SinkProvided"
+
+	// SourceScalerProvided has status True when the Source
+	// has been configured with an scaler.
+	SourceScalerProvided apis.ConditionType = "ScalerProvided"
 )
 
 // GetFullType implements duck.Implementable
@@ -140,10 +155,19 @@ func (s *Source) Populate() {
 	s.Spec.CloudEventOverrides = &CloudEventOverrides{
 		Extensions: map[string]string{"boosh": "kakow"},
 	}
+	s.Spec.ScalerSpec = &ScalerSpec{
+		MinScale: utilpointer.Int32Ptr(0),
+		MaxScale: utilpointer.Int32Ptr(1),
+		Options:  map[string]string{"myoption": "myoptionvalue"},
+	}
 	s.Status.ObservedGeneration = 42
 	s.Status.Conditions = Conditions{{
 		// Populate ALL fields
 		Type:               SourceConditionSinkProvided,
+		Status:             corev1.ConditionTrue,
+		LastTransitionTime: apis.VolatileTime{Inner: metav1.NewTime(time.Date(1984, 02, 28, 18, 52, 00, 00, time.UTC))},
+	}, {
+		Type:               SourceScalerProvided,
 		Status:             corev1.ConditionTrue,
 		LastTransitionTime: apis.VolatileTime{Inner: metav1.NewTime(time.Date(1984, 02, 28, 18, 52, 00, 00, time.UTC))},
 	}}
