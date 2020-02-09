@@ -23,6 +23,7 @@ import (
 	duckv1alpha1 "github.com/google/knative-gcp/pkg/apis/duck/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	duckv1 "knative.dev/pkg/apis/duck/v1"
 	"knative.dev/pkg/ptr"
 )
 
@@ -64,15 +65,7 @@ func (ss *PullSubscriptionSpec) SetDefaults(ctx context.Context) {
 		ss.Mode = ModeCloudEventsBinary
 	}
 
-	if scalerSpec := ss.ScalerSpec; scalerSpec != nil {
-		if scalerSpec.MinScale == nil {
-			scalerSpec.MinScale = &defaultMinScale
-		}
-		if scalerSpec.MaxScale == nil {
-			scalerSpec.MaxScale = &defaultMaxScale
-		}
-		if scalerSpec.Options == nil || len(scalerSpec.Options) == 0 {
-			scalerSpec.Options = map[string]string{SubscriptionSize: defaultSubscriptionSize}
-		}
+	if ss.ScalerSpec != nil && !equality.Semantic.DeepEqual(ss.ScalerSpec, &duckv1.ScalerSpec{}) {
+		ss.ScalerSpec.SetDefault(ctx)
 	}
 }

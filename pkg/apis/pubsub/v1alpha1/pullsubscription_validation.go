@@ -88,15 +88,10 @@ func (current *PullSubscriptionSpec) Validate(ctx context.Context) *apis.FieldEr
 		errs = errs.Also(apis.ErrInvalidValue(current.Mode, "mode"))
 	}
 
-	if scalerSpec := current.ScalerSpec; scalerSpec != nil {
-		if *scalerSpec.MinScale < 0 {
-			errs = errs.Also(apis.ErrInvalidValue(*scalerSpec.MinScale, "scalerSpec.minScale"))
-		}
-		if *scalerSpec.MaxScale < 1 {
-			errs = errs.Also(apis.ErrInvalidValue(*scalerSpec.MaxScale, "scalerSpec.maxScale"))
-		}
-		if *scalerSpec.MinScale > *scalerSpec.MaxScale {
-			errs = errs.Also(apis.ErrInvalidValue(*scalerSpec.MaxScale, "scalerSpec.minScale"))
+	// ScalerSpec [optional]
+	if current.ScalerSpec != nil && !equality.Semantic.DeepEqual(current.ScalerSpec, &duckv1.ScalerSpec{}) {
+		if err := current.ScalerSpec.Validate(ctx); err != nil {
+			errs = errs.Also(err.ViaField("scalerSpec"))
 		}
 	}
 
