@@ -17,6 +17,9 @@ limitations under the License.
 package v1
 
 import (
+	"context"
+	"fmt"
+	"math"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -26,6 +29,24 @@ import (
 
 	"knative.dev/pkg/apis"
 	"knative.dev/pkg/apis/duck"
+)
+
+const (
+	// SourceScalerAnnotationKey is the annotation for the explicit class of
+	// source scaler that a particular resource has opted into. For example,
+	// sources.knative.dev/scaler: foo
+	SourceScalerAnnotationKey = "sources.knative.dev/scaler"
+	// KEDA is Keda Scaler
+	KEDA = "keda.sources.knative.dev"
+	// KSVC is Knative Service Scaler
+	KSVC = "ksvc.sources.knative.dev"
+
+	// defaultMinScale is the default minimum set of Pods the scaler should
+	// downscale the source to.
+	defaultMinScale int32 = 0
+	// defaultMaxScale is the default maximum set of Pods the scaler should
+	// upscale the source to.
+	defaultMaxScale int32 = 1
 )
 
 // Source is an Implementable "duck type".
@@ -120,6 +141,47 @@ func (ss *SourceStatus) IsReady() bool {
 		}
 	}
 	return false
+}
+
+// Validate the ScalerSpec has all the necessary fields.
+func (ss *ScalerSpec) Validate(ctx context.Context) *apis.FieldError {
+	if ss == nil {
+		return nil
+	}
+	var errs *apis.FieldError
+	if ss.MinScale == nil {
+		errs = errs.Also(apis.ErrMissingField("scalerSpec.minScale"))
+	} else if *ss.MinScale < 0 {
+		errs = errs.Also(apis.ErrOutOfBoundsValue(*ss.MinScale, 0, math.MaxInt32, "scalerSpec.minScale"))
+	}
+
+	if ss.MaxScale == nil {
+		errs = errs.Also(apis.ErrMissingField("scalerSpec.maxScale"))
+	} else if *ss.MaxScale < 1 {
+		errs = errs.Also(apis.ErrOutOfBoundsValue(*ss.MaxScale, 1, math.MaxInt32, "scalerSpec.maxScale"))
+	}
+
+	if ss.MinScale != nil && ss.MaxScale != nil && *ss.MaxScale < *ss.MinScale {
+		errs = errs.Also(&apis.FieldError{
+			Message: fmt.Sprintf("maxScale=%d is less than minScale=%d", *ss.MaxScale, *ss.MinScale),
+			Paths:   []string{"scalerSpec.maxScale", "scalerSpec.minScale"},
+		})
+	}
+
+	return errs
+}
+
+func (ss *ScalerSpec) SetDefault(ctx context.Context) {
+	if ss == nil {
+		return
+	}
+
+	if ss.MinScale == nil {
+		ss.MinScale = utilpointer.Int32Ptr(defaultMinScale)
+	}
+	if ss.MaxScale == nil {
+		ss.MaxScale = utilpointer.Int32Ptr(defaultMaxScale)
+	}
 }
 
 var (
