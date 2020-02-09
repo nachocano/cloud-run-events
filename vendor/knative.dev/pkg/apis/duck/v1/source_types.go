@@ -150,21 +150,21 @@ func (ss *ScalerSpec) Validate(ctx context.Context) *apis.FieldError {
 	}
 	var errs *apis.FieldError
 	if ss.MinScale == nil {
-		errs = errs.Also(apis.ErrMissingField("scalerSpec.minScale"))
+		errs = errs.Also(apis.ErrMissingField("minScale"))
 	} else if *ss.MinScale < 0 {
-		errs = errs.Also(apis.ErrOutOfBoundsValue(*ss.MinScale, 0, math.MaxInt32, "scalerSpec.minScale"))
+		errs = errs.Also(apis.ErrOutOfBoundsValue(*ss.MinScale, 0, math.MaxInt32, "minScale"))
 	}
 
 	if ss.MaxScale == nil {
-		errs = errs.Also(apis.ErrMissingField("scalerSpec.maxScale"))
+		errs = errs.Also(apis.ErrMissingField("maxScale"))
 	} else if *ss.MaxScale < 1 {
-		errs = errs.Also(apis.ErrOutOfBoundsValue(*ss.MaxScale, 1, math.MaxInt32, "scalerSpec.maxScale"))
+		errs = errs.Also(apis.ErrOutOfBoundsValue(*ss.MaxScale, 1, math.MaxInt32, "maxScale"))
 	}
 
 	if ss.MinScale != nil && ss.MaxScale != nil && *ss.MaxScale < *ss.MinScale {
 		errs = errs.Also(&apis.FieldError{
 			Message: fmt.Sprintf("maxScale=%d is less than minScale=%d", *ss.MaxScale, *ss.MinScale),
-			Paths:   []string{"scalerSpec.maxScale", "scalerSpec.minScale"},
+			Paths:   []string{"maxScale", "minScale"},
 		})
 	}
 
