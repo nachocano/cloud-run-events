@@ -31,24 +31,6 @@ import (
 	"knative.dev/pkg/apis/duck"
 )
 
-const (
-	// SourceScalerAnnotationKey is the annotation for the explicit class of
-	// source scaler that a particular resource has opted into. For example,
-	// sources.knative.dev/scaler: foo
-	SourceScalerAnnotationKey = "sources.knative.dev/scaler"
-	// KEDA is Keda Scaler
-	KEDA = "keda.sources.knative.dev"
-	// KSVC is Knative Service Scaler
-	KSVC = "ksvc.sources.knative.dev"
-
-	// defaultMinScale is the default minimum set of Pods the scaler should
-	// downscale the source to.
-	defaultMinScale int32 = 0
-	// defaultMaxScale is the default maximum set of Pods the scaler should
-	// upscale the source to.
-	defaultMaxScale int32 = 1
-)
-
 // Source is an Implementable "duck type".
 var _ duck.Implementable = (*Source)(nil)
 
@@ -87,7 +69,30 @@ type SourceSpec struct {
 	ScalerSpec *ScalerSpec `json:"scalerSpec,omitempty"`
 }
 
+// ScalerClass is the class of source scaler that a particular resource has opted into.
+type ScalerClass string
+
+const (
+	// ScalerClassKeda is the Keda Scaler class.
+	ScalerClassKeda ScalerClass = "keda"
+	// ScalerClassKsvc is the Knative Service class.
+	ScalerClassKsvc ScalerClass = "ksvc"
+)
+
+const (
+	// defaultScalerClass is the default scaler class.
+	defaultScalerClass = ScalerClassKeda
+	// defaultMinScale is the default minimum set of Pods the scaler should
+	// downscale the source to.
+	defaultMinScale int32 = 0
+	// defaultMaxScale is the default maximum set of Pods the scaler should
+	// upscale the source to.
+	defaultMaxScale int32 = 1
+)
+
 type ScalerSpec struct {
+	// Class defines the class of scaler to use.
+	Class ScalerClass `json:"class,omitempty"`
 	// MinScale defines the minimum scale for the source.
 	// If not specified, defaults to zero.
 	// +optional
@@ -99,7 +104,7 @@ type ScalerSpec struct {
 	MaxScale *int32 `json:"maxScale,omitempty"`
 
 	// Options defines specific knobs to tune based on the
-	// particular scaling backend (e.g., KEDA or Kn Service)
+	// particular scaling backend (e.g., keda or ksvc)
 	// +optional
 	Options map[string]string `json:"options,omitempty"`
 }
@@ -149,6 +154,9 @@ func (ss *ScalerSpec) Validate(ctx context.Context) *apis.FieldError {
 		return nil
 	}
 	var errs *apis.FieldError
+	if ss.Class == "" {
+		errs = errs.Also(apis.ErrMissingField("class"))
+	}
 	if ss.MinScale == nil {
 		errs = errs.Also(apis.ErrMissingField("minScale"))
 	} else if *ss.MinScale < 0 {
@@ -175,7 +183,9 @@ func (ss *ScalerSpec) SetDefault(ctx context.Context) {
 	if ss == nil {
 		return
 	}
-
+	if ss.Class == "" {
+		ss.Class = defaultScalerClass
+	}
 	if ss.MinScale == nil {
 		ss.MinScale = utilpointer.Int32Ptr(defaultMinScale)
 	}
@@ -218,6 +228,7 @@ func (s *Source) Populate() {
 		Extensions: map[string]string{"boosh": "kakow"},
 	}
 	s.Spec.ScalerSpec = &ScalerSpec{
+		Class:    ScalerClassKsvc,
 		MinScale: utilpointer.Int32Ptr(0),
 		MaxScale: utilpointer.Int32Ptr(1),
 		Options:  map[string]string{"myoption": "myoptionvalue"},
@@ -238,6 +249,11 @@ func (s *Source) Populate() {
 		Host:     "tableflip.dev",
 		RawQuery: "flip=mattmoor",
 	}
+}
+
+// IsScalable returns true if the Source has been configured with scaling options.
+func (src *Source) IsScalable() bool {
+	return src.Spec.ScalerSpec != nil
 }
 
 // GetListType implements apis.Listable
