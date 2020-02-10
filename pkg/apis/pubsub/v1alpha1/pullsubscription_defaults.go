@@ -30,12 +30,6 @@ import (
 const (
 	defaultRetentionDuration = 7 * 24 * time.Hour
 	defaultAckDeadline       = 30 * time.Second
-	defaultSubscriptionSize  = "5"
-)
-
-var (
-	defaultMinScale int32 = 0
-	defaultMaxScale int32 = 1
 )
 
 func (s *PullSubscription) SetDefaults(ctx context.Context) {

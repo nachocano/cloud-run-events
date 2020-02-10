@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"go.uber.org/zap"
 
 	"github.com/google/knative-gcp/pkg/utils"
@@ -33,7 +32,6 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -436,17 +434,6 @@ func removeFinalizer(s *v1alpha1.PullSubscription) {
 }
 
 func (r *Reconciler) reconcileDataPlaneResources(ctx context.Context, src *v1alpha1.PullSubscription) error {
-	// TODO call helpers, re-structure
-	return nil
-}
-
-func (r *Reconciler) reconcileReceiveAdapter(ctx context.Context, src *v1alpha1.PullSubscription) (*appsv1.Deployment, error) {
-	existing, err := r.getReceiveAdapter(ctx, src)
-	if err != nil && !apierrors.IsNotFound(err) {
-		logging.FromContext(ctx).Desugar().Error("Unable to get an existing receive adapter", zap.Error(err))
-		return nil, err
-	}
-
 	loggingConfig, err := logging.LoggingConfigToJson(r.loggingConfig)
 	if err != nil {
 		logging.FromContext(ctx).Desugar().Error("Error serializing existing logging config", zap.Error(err))
@@ -483,22 +470,43 @@ func (r *Reconciler) reconcileReceiveAdapter(ctx context.Context, src *v1alpha1.
 		TracingConfig:  tracingConfig,
 	})
 
+	if src.IsScalable() {
+
+		err = r.reconcileScalableResources(ctx, desired, src)
+		if err != nil {
+			logging.FromContext(ctx).Desugar().Error("Unable to reconcile an scalable resources", zap.Error(err))
+			return err
+		}
+	} else {
+		existing, err := r.getOrCreateReceiveAdapter(ctx, desired, src)
+		if err != nil {
+			return err
+		}
+		if !equality.Semantic.DeepDerivative(desired.Spec, existing.Spec) {
+			existing.Spec = desired.Spec
+			_, err := r.KubeClientSet.AppsV1().Deployments(src.Namespace).Update(existing)
+			if err != nil {
+				logging.FromContext(ctx).Desugar().Error("Error updating Receive Adapter", zap.Error(err))
+				return err
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+func (r *Reconciler) getOrCreateReceiveAdapter(ctx context.Context, desired *appsv1.Deployment, src *v1alpha1.PullSubscription) (*appsv1.Deployment, error) {
+	existing, err := r.getReceiveAdapter(ctx, src)
+	if err != nil && !apierrors.IsNotFound(err) {
+		logging.FromContext(ctx).Desugar().Error("Unable to get an existing Receive Adapter", zap.Error(err))
+		return nil, err
+	}
 	if existing == nil {
-		ra, err := r.KubeClientSet.AppsV1().Deployments(src.Namespace).Create(desired)
+		existing, err = r.KubeClientSet.AppsV1().Deployments(src.Namespace).Create(desired)
 		if err != nil {
 			logging.FromContext(ctx).Desugar().Error("Error creating Receive Adapter", zap.Error(err))
 			return nil, err
 		}
-		return ra, nil
-	}
-	if diff := cmp.Diff(desired.Spec, existing.Spec); diff != "" {
-		existing.Spec = desired.Spec
-		ra, err := r.KubeClientSet.AppsV1().Deployments(src.Namespace).Update(existing)
-		if err != nil {
-			logging.FromContext(ctx).Desugar().Error("Error updating Receive Adapter", zap.Error(err))
-			return nil, err
-		}
-		return ra, nil
 	}
 	return existing, nil
 }
@@ -524,27 +532,36 @@ func (r *Reconciler) getReceiveAdapter(ctx context.Context, src *v1alpha1.PullSu
 	return nil, apierrors.NewNotFound(schema.GroupResource{}, "")
 }
 
-func (r *Reconciler) reconcileScaledObject(ctx context.Context, ra *appsv1.Deployment, src *v1alpha1.PullSubscription) (*unstructured.Unstructured, error) {
+func (r *Reconciler) reconcileScalableResources(ctx context.Context, ra *appsv1.Deployment, src *v1alpha1.PullSubscription) error {
 	gvr, _ := meta.UnsafeGuessKindToResource(resources.ScaledObjectGVK)
 	scaledObjectResourceInterface := r.DynamicClientSet.Resource(gvr).Namespace(src.Namespace)
 	if scaledObjectResourceInterface == nil {
-		return nil, fmt.Errorf("unable to create dynamic client for ScaledObject")
+		return fmt.Errorf("unable to create dynamic client for ScaledObject")
 	}
 
 	so := resources.MakeScaledObject(ctx, ra, src)
-	existing, err := scaledObjectResourceInterface.Get(so.GetName(), metav1.GetOptions{})
+	_, err := scaledObjectResourceInterface.Get(so.GetName(), metav1.GetOptions{})
 	if err != nil {
 		if apierrs.IsNotFound(err) {
-			existing, err = scaledObjectResourceInterface.Create(so, metav1.CreateOptions{})
+			// If there is no scaledObject, we need to create the deployment as well,
+			// so that the ScaledObject can set it as its scaleTargetRef.
+			_, err := r.getOrCreateReceiveAdapter(ctx, ra, src)
 			if err != nil {
-				logging.FromContext(ctx).Error("Failed to create ScaledObject", zap.Any("so", so), zap.Error(err))
-				return nil, err
+				logging.FromContext(ctx).Desugar().Error("Failed to get or create Receive Adapter in order to create the ScaledObject", zap.Error(err))
+				return err
+			}
+			// Note that the ScaledObject is the one in charge of reconciling the Deployment, e.g., by changing the number
+			// of replicas.
+			_, err = scaledObjectResourceInterface.Create(so, metav1.CreateOptions{})
+			if err != nil {
+				logging.FromContext(ctx).Desugar().Error("Failed to create ScaledObject", zap.Any("so", so), zap.Error(err))
+				return err
 			}
 		} else {
-			logging.FromContext(ctx).Error("Failed to get ScaledObject", zap.Any("so", so), zap.Error(err))
+			logging.FromContext(ctx).Desugar().Error("Failed to get ScaledObject", zap.Any("so", so), zap.Error(err))
 		}
 	}
-	return existing, nil
+	return nil
 }
 
 func (r *Reconciler) UpdateFromLoggingConfigMap(cfg *corev1.ConfigMap) {

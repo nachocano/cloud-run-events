@@ -48,6 +48,7 @@ func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullS
 					"apiVersion":         ps.GetGroupVersion().String(),
 					"kind":               ps.GetGroupVersionKind().Kind,
 					"blockOwnerDeletion": true,
+					"controller":         true,
 					"name":               ps.Name,
 					"uid":                ps.UID,
 				}},
