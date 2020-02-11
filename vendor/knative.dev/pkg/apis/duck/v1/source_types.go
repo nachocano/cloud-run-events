@@ -60,13 +60,6 @@ type SourceSpec struct {
 	// modifications of the event sent to the sink.
 	// +optional
 	CloudEventOverrides *CloudEventOverrides `json:"ceOverrides,omitempty"`
-
-	// Scaler defines the scaling options for the source, e.g., whether it can
-	// scale to zero, the maximum number of pods it can scale to, as well as particular
-	// options based on the scaling technology used.
-	// If not specified, the source is non-scalable.
-	// +optional
-	Scaler *ScalerSpec `json:"scaler,omitempty"`
 }
 
 // ScalerClass is the class of source scaler that a particular resource has opted into.
@@ -228,12 +221,6 @@ func (s *Source) Populate() {
 	s.Spec.CloudEventOverrides = &CloudEventOverrides{
 		Extensions: map[string]string{"boosh": "kakow"},
 	}
-	s.Spec.Scaler = &ScalerSpec{
-		Class:    ScalerClassKsvc,
-		MinScale: utilpointer.Int32Ptr(0),
-		MaxScale: utilpointer.Int32Ptr(1),
-		Options:  map[string]string{"myoption": "myoptionvalue"},
-	}
 	s.Status.ObservedGeneration = 42
 	s.Status.Conditions = Conditions{{
 		// Populate ALL fields
@@ -252,11 +239,6 @@ func (s *Source) Populate() {
 	}
 }
 
-// IsScalable returns true if the SourceSpec has been configured with scaling options.
-func (ss *SourceSpec) IsScalable() bool {
-	return ss.Scaler != nil
-}
-
 // GetListType implements apis.Listable
 func (*Source) GetListType() runtime.Object {
 	return &SourceList{}
@@ -270,4 +252,116 @@ type SourceList struct {
 	metav1.ListMeta `json:"metadata"`
 
 	Items []Source `json:"items"`
+}
+
+// Source is an Implementable "duck type".
+var _ duck.Implementable = (*KedaSource)(nil)
+
+// +genduck
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type KedaSource struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   KedaSourceSpec   `json:"spec"`
+	Status KedaSourceStatus `json:"status"`
+}
+
+type KedaSourceSpec struct {
+	SourceSpec `json:",inline"`
+
+	Scaler *KedaScalerSpec `json:"scaler,omitempty"`
+}
+
+type KedaSourceStatus struct {
+	SourceStatus `json:",inline"`
+	// TODO what else
+}
+
+type KedaScalerSpec struct {
+	// +optional
+	MinScale *int32 `json:"minScale,omitempty"`
+
+	// +optional
+	MaxScale *int32 `json:"maxScale,omitempty"`
+
+	// +optional
+	PollingInterval *int32 `json:"pollingInterval,omitempty"`
+
+	// +optional
+	CooldownPeriod *int32 `json:"cooldownPeriod,omitempty"`
+
+	Type string `json:"type,omitempty"`
+
+	Metadata map[string]string `json:"metadata"`
+}
+
+var (
+	// Verify Source resources meet duck contracts.
+	_ duck.Populatable = (*KedaSource)(nil)
+	_ apis.Listable    = (*KedaSource)(nil)
+)
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// KedaSourceList is a list of KedaSource resources
+type KedaSourceList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+
+	Items []KedaSource `json:"items"`
+}
+
+// GetListType implements apis.Listable
+func (*KedaSource) GetListType() runtime.Object {
+	return &KedaSourceList{}
+}
+
+// IsReady returns true if the resource is ready overall.
+func (ss *KedaSourceStatus) IsReady() bool {
+	return ss.SourceStatus.IsReady()
+}
+
+// GetFullType implements duck.Implementable
+func (*KedaSource) GetFullType() duck.Populatable {
+	return &KedaSource{}
+}
+
+// Populate implements duck.Populatable
+func (s *KedaSource) Populate() {
+	s.Spec.Sink = Destination{
+		URI: &apis.URL{
+			Scheme:   "https",
+			Host:     "tableflip.dev",
+			RawQuery: "flip=mattmoor",
+		},
+	}
+	s.Spec.CloudEventOverrides = &CloudEventOverrides{
+		Extensions: map[string]string{"boosh": "kakow"},
+	}
+	s.Spec.Scaler = &KedaScalerSpec{
+		MinScale:        utilpointer.Int32Ptr(0),
+		MaxScale:        utilpointer.Int32Ptr(1),
+		PollingInterval: utilpointer.Int32Ptr(10),
+		CooldownPeriod:  utilpointer.Int32Ptr(2),
+		Type:            "mytype",
+		Metadata:        map[string]string{"myoption": "myoptionvalue"},
+	}
+	s.Status.ObservedGeneration = 42
+	s.Status.Conditions = Conditions{{
+		// Populate ALL fields
+		Type:               SourceConditionSinkProvided,
+		Status:             corev1.ConditionTrue,
+		LastTransitionTime: apis.VolatileTime{Inner: metav1.NewTime(time.Date(1984, 02, 28, 18, 52, 00, 00, time.UTC))},
+	}, {
+		Type:               SourceScalerProvided,
+		Status:             corev1.ConditionTrue,
+		LastTransitionTime: apis.VolatileTime{Inner: metav1.NewTime(time.Date(1984, 02, 28, 18, 52, 00, 00, time.UTC))},
+	}}
+	s.Status.SinkURI = &apis.URL{
+		Scheme:   "https",
+		Host:     "tableflip.dev",
+		RawQuery: "flip=mattmoor",
+	}
 }
