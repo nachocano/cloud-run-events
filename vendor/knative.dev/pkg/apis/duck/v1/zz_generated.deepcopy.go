@@ -395,8 +395,8 @@ func (in *SourceSpec) DeepCopyInto(out *SourceSpec) {
 		*out = new(CloudEventOverrides)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.ScalerSpec != nil {
-		in, out := &in.ScalerSpec, &out.ScalerSpec
+	if in.Scaler != nil {
+		in, out := &in.Scaler, &out.Scaler
 		*out = new(ScalerSpec)
 		(*in).DeepCopyInto(*out)
 	}
