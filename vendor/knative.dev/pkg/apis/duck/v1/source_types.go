@@ -17,15 +17,11 @@ limitations under the License.
 package v1
 
 import (
-	"context"
-	"fmt"
-	"math"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	utilpointer "k8s.io/utils/pointer"
 
 	"knative.dev/pkg/apis"
 	"knative.dev/pkg/apis/duck"
@@ -60,47 +56,6 @@ type SourceSpec struct {
 	// modifications of the event sent to the sink.
 	// +optional
 	CloudEventOverrides *CloudEventOverrides `json:"ceOverrides,omitempty"`
-}
-
-// ScalerClass is the class of source scaler that a particular resource has opted into.
-type ScalerClass string
-
-const (
-	// ScalerClassKeda is the Keda Scaler class.
-	ScalerClassKeda ScalerClass = "keda"
-	// ScalerClassKsvc is the Knative Service class.
-	ScalerClassKsvc ScalerClass = "ksvc"
-)
-
-const (
-	// defaultScalerClass is the default scaler class.
-	defaultScalerClass = ScalerClassKeda
-	// defaultMinScale is the default minimum set of Pods the scaler should
-	// downscale the source to.
-	defaultMinScale int32 = 0
-	// defaultMaxScale is the default maximum set of Pods the scaler should
-	// upscale the source to.
-	defaultMaxScale int32 = 1
-)
-
-type ScalerSpec struct {
-	// Class defines the class of scaler to use.
-	Class ScalerClass `json:"class,omitempty"`
-
-	// MinScale defines the minimum scale for the source.
-	// If not specified, defaults to zero.
-	// +optional
-	MinScale *int32 `json:"minScale,omitempty"`
-
-	// MaxScale defines the maximum scale for the source.
-	// If not specified, defaults to one.
-	// +optional
-	MaxScale *int32 `json:"maxScale,omitempty"`
-
-	// Options defines specific knobs to tune based on the
-	// particular scaling backend (e.g., keda or ksvc)
-	// +optional
-	Options map[string]string `json:"options,omitempty"`
 }
 
 // CloudEventOverrides defines arguments for a Source that control the output
@@ -142,52 +97,6 @@ func (ss *SourceStatus) IsReady() bool {
 	return false
 }
 
-// Validate the ScalerSpec has all the necessary fields.
-func (ss *ScalerSpec) Validate(ctx context.Context) *apis.FieldError {
-	if ss == nil {
-		return nil
-	}
-	var errs *apis.FieldError
-	if ss.Class == "" {
-		errs = errs.Also(apis.ErrMissingField("class"))
-	}
-	if ss.MinScale == nil {
-		errs = errs.Also(apis.ErrMissingField("minScale"))
-	} else if *ss.MinScale < 0 {
-		errs = errs.Also(apis.ErrOutOfBoundsValue(*ss.MinScale, 0, math.MaxInt32, "minScale"))
-	}
-
-	if ss.MaxScale == nil {
-		errs = errs.Also(apis.ErrMissingField("maxScale"))
-	} else if *ss.MaxScale < 1 {
-		errs = errs.Also(apis.ErrOutOfBoundsValue(*ss.MaxScale, 1, math.MaxInt32, "maxScale"))
-	}
-
-	if ss.MinScale != nil && ss.MaxScale != nil && *ss.MaxScale < *ss.MinScale {
-		errs = errs.Also(&apis.FieldError{
-			Message: fmt.Sprintf("maxScale=%d is less than minScale=%d", *ss.MaxScale, *ss.MinScale),
-			Paths:   []string{"maxScale", "minScale"},
-		})
-	}
-
-	return errs
-}
-
-func (ss *ScalerSpec) SetDefault(ctx context.Context) {
-	if ss == nil {
-		return
-	}
-	if ss.Class == "" {
-		ss.Class = defaultScalerClass
-	}
-	if ss.MinScale == nil {
-		ss.MinScale = utilpointer.Int32Ptr(defaultMinScale)
-	}
-	if ss.MaxScale == nil {
-		ss.MaxScale = utilpointer.Int32Ptr(defaultMaxScale)
-	}
-}
-
 var (
 	// Verify Source resources meet duck contracts.
 	_ duck.Populatable = (*Source)(nil)
@@ -198,10 +107,6 @@ const (
 	// SourceConditionSinkProvided has status True when the Source
 	// has been configured with a sink target that is resolvable.
 	SourceConditionSinkProvided apis.ConditionType = "SinkProvided"
-
-	// SourceScalerProvided has status True when the Source
-	// has been configured with an scaler.
-	SourceScalerProvided apis.ConditionType = "ScalerProvided"
 )
 
 // GetFullType implements duck.Implementable
@@ -227,10 +132,6 @@ func (s *Source) Populate() {
 		Type:               SourceConditionSinkProvided,
 		Status:             corev1.ConditionTrue,
 		LastTransitionTime: apis.VolatileTime{Inner: metav1.NewTime(time.Date(1984, 02, 28, 18, 52, 00, 00, time.UTC))},
-	}, {
-		Type:               SourceScalerProvided,
-		Status:             corev1.ConditionTrue,
-		LastTransitionTime: apis.VolatileTime{Inner: metav1.NewTime(time.Date(1984, 02, 28, 18, 52, 00, 00, time.UTC))},
 	}}
 	s.Status.SinkURI = &apis.URL{
 		Scheme:   "https",
@@ -252,116 +153,4 @@ type SourceList struct {
 	metav1.ListMeta `json:"metadata"`
 
 	Items []Source `json:"items"`
-}
-
-// Source is an Implementable "duck type".
-var _ duck.Implementable = (*KedaSource)(nil)
-
-// +genduck
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-type KedaSource struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec   KedaSourceSpec   `json:"spec"`
-	Status KedaSourceStatus `json:"status"`
-}
-
-type KedaSourceSpec struct {
-	SourceSpec `json:",inline"`
-
-	Scaler *KedaScalerSpec `json:"scaler,omitempty"`
-}
-
-type KedaSourceStatus struct {
-	SourceStatus `json:",inline"`
-	// TODO what else
-}
-
-type KedaScalerSpec struct {
-	// +optional
-	MinScale *int32 `json:"minScale,omitempty"`
-
-	// +optional
-	MaxScale *int32 `json:"maxScale,omitempty"`
-
-	// +optional
-	PollingInterval *int32 `json:"pollingInterval,omitempty"`
-
-	// +optional
-	CooldownPeriod *int32 `json:"cooldownPeriod,omitempty"`
-
-	Type string `json:"type,omitempty"`
-
-	Metadata map[string]string `json:"metadata"`
-}
-
-var (
-	// Verify Source resources meet duck contracts.
-	_ duck.Populatable = (*KedaSource)(nil)
-	_ apis.Listable    = (*KedaSource)(nil)
-)
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// KedaSourceList is a list of KedaSource resources
-type KedaSourceList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata"`
-
-	Items []KedaSource `json:"items"`
-}
-
-// GetListType implements apis.Listable
-func (*KedaSource) GetListType() runtime.Object {
-	return &KedaSourceList{}
-}
-
-// IsReady returns true if the resource is ready overall.
-func (ss *KedaSourceStatus) IsReady() bool {
-	return ss.SourceStatus.IsReady()
-}
-
-// GetFullType implements duck.Implementable
-func (*KedaSource) GetFullType() duck.Populatable {
-	return &KedaSource{}
-}
-
-// Populate implements duck.Populatable
-func (s *KedaSource) Populate() {
-	s.Spec.Sink = Destination{
-		URI: &apis.URL{
-			Scheme:   "https",
-			Host:     "tableflip.dev",
-			RawQuery: "flip=mattmoor",
-		},
-	}
-	s.Spec.CloudEventOverrides = &CloudEventOverrides{
-		Extensions: map[string]string{"boosh": "kakow"},
-	}
-	s.Spec.Scaler = &KedaScalerSpec{
-		MinScale:        utilpointer.Int32Ptr(0),
-		MaxScale:        utilpointer.Int32Ptr(1),
-		PollingInterval: utilpointer.Int32Ptr(10),
-		CooldownPeriod:  utilpointer.Int32Ptr(2),
-		Type:            "mytype",
-		Metadata:        map[string]string{"myoption": "myoptionvalue"},
-	}
-	s.Status.ObservedGeneration = 42
-	s.Status.Conditions = Conditions{{
-		// Populate ALL fields
-		Type:               SourceConditionSinkProvided,
-		Status:             corev1.ConditionTrue,
-		LastTransitionTime: apis.VolatileTime{Inner: metav1.NewTime(time.Date(1984, 02, 28, 18, 52, 00, 00, time.UTC))},
-	}, {
-		Type:               SourceScalerProvided,
-		Status:             corev1.ConditionTrue,
-		LastTransitionTime: apis.VolatileTime{Inner: metav1.NewTime(time.Date(1984, 02, 28, 18, 52, 00, 00, time.UTC))},
-	}}
-	s.Status.SinkURI = &apis.URL{
-		Scheme:   "https",
-		Host:     "tableflip.dev",
-		RawQuery: "flip=mattmoor",
-	}
 }
