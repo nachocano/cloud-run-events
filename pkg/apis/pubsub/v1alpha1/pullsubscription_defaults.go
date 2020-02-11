@@ -23,13 +23,17 @@ import (
 	duckv1alpha1 "github.com/google/knative-gcp/pkg/apis/duck/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	duckv1 "knative.dev/pkg/apis/duck/v1"
+	pkgduckv1alpha1 "knative.dev/pkg/apis/duck/v1alpha1"
 	"knative.dev/pkg/ptr"
 )
 
 const (
 	defaultRetentionDuration = 7 * 24 * time.Hour
 	defaultAckDeadline       = 30 * time.Second
+
+	defaultScalerType       = "gcp-pubsub"
+	defaultSubscriptionSize = "5"
+	subscriptionSize        = "subscriptionSize"
 )
 
 func (s *PullSubscription) SetDefaults(ctx context.Context) {
@@ -59,12 +63,20 @@ func (ss *PullSubscriptionSpec) SetDefaults(ctx context.Context) {
 		ss.Mode = ModeCloudEventsBinary
 	}
 
-	var min int32 = 0
-	var max int32 = 5
-	if ss.Scaler != nil && !equality.Semantic.DeepEqual(ss.Scaler, &duckv1.KedaScalerSpec{}) {
-		ss.Scaler.MinScale = &min
-		ss.Scaler.MaxScale = &max
-		ss.Scaler.Type = "gcp-pubsub"
-		ss.Scaler.Metadata = map[string]string{"subscriptionSize": "5"}
+	if ss.Scaler != nil && !equality.Semantic.DeepEqual(ss.Scaler, &pkgduckv1alpha1.KedaScalerSpec{}) {
+		// Set up common defaults for Keda scalers.
+		ss.Scaler.SetDefault(ctx)
+
+		// Set up our own defaults.
+		if ss.Scaler.Type == "" {
+			ss.Scaler.Type = defaultScalerType
+		}
+
+		if ss.Scaler.Metadata == nil {
+			ss.Scaler.Metadata = make(map[string]string)
+		}
+		if _, ok := ss.Scaler.Metadata[subscriptionSize]; !ok {
+			ss.Scaler.Metadata[subscriptionSize] = defaultSubscriptionSize
+		}
 	}
 }

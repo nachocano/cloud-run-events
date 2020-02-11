@@ -18,9 +18,11 @@ package v1alpha1
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	duckv1 "knative.dev/pkg/apis/duck/v1"
+	duckv1alpha1 "knative.dev/pkg/apis/duck/v1alpha1"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -88,12 +90,22 @@ func (current *PullSubscriptionSpec) Validate(ctx context.Context) *apis.FieldEr
 		errs = errs.Also(apis.ErrInvalidValue(current.Mode, "mode"))
 	}
 
-	// ScalerSpec [optional]
-	//if current.Scaler != nil && !equality.Semantic.DeepEqual(current.Scaler, &duckv1.ScalerSpec{}) {
-	//	if err := current.Scaler.Validate(ctx); err != nil {
-	//		errs = errs.Also(err.ViaField("scaler"))
-	//	}
-	//}
+	// KedaScalerSpec [optional]
+	if current.Scaler != nil && !equality.Semantic.DeepEqual(current.Scaler, &duckv1alpha1.KedaScalerSpec{}) {
+		if err := current.Scaler.Validate(ctx); err != nil {
+			errs = errs.Also(err.ViaField("scaler"))
+		}
+
+		if current.Scaler.Type != defaultScalerType {
+			errs = errs.Also(apis.ErrInvalidValue(current.Scaler.Type, "scaler.type"))
+		}
+
+		if val, ok := current.Scaler.Metadata[subscriptionSize]; !ok {
+			errs = errs.Also(apis.ErrMissingField("scaler.metadata[subscriptionSize]"))
+		} else if _, err := strconv.Atoi(val); err != nil {
+			errs = errs.Also(apis.ErrInvalidValue(val, "scaler.metadata[subscriptionSize]"))
+		}
+	}
 
 	return errs
 }

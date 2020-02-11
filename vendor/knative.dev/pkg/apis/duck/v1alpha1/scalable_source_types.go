@@ -88,7 +88,7 @@ type KedaScalerSpec struct {
 	// Type corresponds to the Keda scaler implementation. For example, for Pub/Sub is "gcp-pubsub",
 	// for Kafka is "kafka", etc. This correponds to Keda's ScaledObject Trigger Type.
 	// Refer to the official Keda documentation for more details: https://github.com/kedacore/keda.
-	Type string `json:"type,omitempty"`
+	Type string `json:"type"`
 
 	// PollingInterval refers to the interval in seconds Keda uses to poll metrics in order to inform
 	// its scaling decisions. If not specified, default to 30 seconds.
