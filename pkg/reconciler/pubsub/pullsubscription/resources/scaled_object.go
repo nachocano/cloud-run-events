@@ -57,12 +57,12 @@ func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullS
 				"scaleTargetRef": map[string]interface{}{
 					"deploymentName": ra.Name,
 				},
-				"minReplicaCount": *ps.Spec.SourceSpec.ScalerSpec.MinScale,
-				"maxReplicaCount": *ps.Spec.SourceSpec.ScalerSpec.MaxScale,
+				"minReplicaCount": *ps.Spec.SourceSpec.Scaler.MinScale,
+				"maxReplicaCount": *ps.Spec.SourceSpec.Scaler.MaxScale,
 				"triggers": []map[string]interface{}{{
 					"type": "gcp-pubsub",
 					"metadata": map[string]interface{}{
-						"subscriptionSize": ps.Spec.SourceSpec.ScalerSpec.Options[v1alpha1.SubscriptionSize],
+						"subscriptionSize": ps.Spec.SourceSpec.Scaler.Options[v1alpha1.SubscriptionSize],
 						"subscriptionName": ps.Status.SubscriptionID,
 						"credentials":      "GOOGLE_APPLICATION_CREDENTIALS_JSON",
 					},

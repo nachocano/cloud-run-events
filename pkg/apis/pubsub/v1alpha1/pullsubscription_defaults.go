@@ -59,7 +59,7 @@ func (ss *PullSubscriptionSpec) SetDefaults(ctx context.Context) {
 		ss.Mode = ModeCloudEventsBinary
 	}
 
-	if ss.ScalerSpec != nil && !equality.Semantic.DeepEqual(ss.ScalerSpec, &duckv1.ScalerSpec{}) {
-		ss.ScalerSpec.SetDefault(ctx)
+	if ss.Scaler != nil && !equality.Semantic.DeepEqual(ss.Scaler, &duckv1.ScalerSpec{}) {
+		ss.Scaler.SetDefault(ctx)
 	}
 }
