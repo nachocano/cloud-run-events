@@ -23,6 +23,7 @@ import (
 	duckv1alpha1 "github.com/google/knative-gcp/pkg/apis/duck/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	"knative.dev/pkg/apis"
 	pkgduckv1alpha1 "knative.dev/pkg/apis/duck/v1alpha1"
 	"knative.dev/pkg/ptr"
 )
@@ -37,7 +38,8 @@ const (
 )
 
 func (s *PullSubscription) SetDefaults(ctx context.Context) {
-	s.Spec.SetDefaults(ctx)
+	withParent := apis.WithinParent(ctx, s.ObjectMeta)
+	s.Spec.SetDefaults(withParent)
 }
 
 func (ss *PullSubscriptionSpec) SetDefaults(ctx context.Context) {
@@ -77,6 +79,11 @@ func (ss *PullSubscriptionSpec) SetDefaults(ctx context.Context) {
 		}
 		if _, ok := ss.Scaler.Metadata[subscriptionSize]; !ok {
 			ss.Scaler.Metadata[subscriptionSize] = defaultSubscriptionSize
+		}
+
+		parentMeta := apis.ParentMeta(ctx)
+		if _, ok := parentMeta.Annotations[pkgduckv1alpha1.SourceScalerAnnotationKey]; !ok {
+			parentMeta.Annotations[pkgduckv1alpha1.SourceScalerAnnotationKey] = pkgduckv1alpha1.KEDA
 		}
 	}
 }

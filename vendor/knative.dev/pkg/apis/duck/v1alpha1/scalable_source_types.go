@@ -52,6 +52,11 @@ const (
 	// SourceScalerProvided has status True when the Source
 	// has been configured with an SourceScaler.
 	SourceScalerProvided apis.ConditionType = "ScalerProvided"
+
+	// SourceScalerAnnotationKey is the annotation for the explicit class of
+	// source scaler that a particular resource has opted into. For example,
+	// sources.knative.dev/scaler: foo
+	SourceScalerAnnotationKey = "sources.knative.dev/scaler"
 )
 
 // +genduck
@@ -114,10 +119,6 @@ type KedaSourceStatus struct {
 }
 
 const (
-	// SourceScalerAnnotationKey is the annotation for the explicit class of
-	// source scaler that a particular resource has opted into. For example,
-	// sources.knative.dev/scaler: foo
-	SourceScalerAnnotationKey = "sources.knative.dev/scaler"
 	// KEDA is Keda Scaler
 	KEDA = "keda.sources.knative.dev"
 
@@ -200,8 +201,8 @@ func (s *KedaSource) Populate() {
 	}
 }
 
-// Validate the ScalerSpec has all the necessary fields.
-func (ss *KedaScalerSpec) Validate(ctx context.Context) *apis.FieldError {
+// Validate the SourceScaler has all the necessary fields.
+func (ss *SourceScaler) Validate(ctx context.Context) *apis.FieldError {
 	if ss == nil {
 		return nil
 	}
@@ -228,7 +229,8 @@ func (ss *KedaScalerSpec) Validate(ctx context.Context) *apis.FieldError {
 	return errs
 }
 
-func (ss *KedaScalerSpec) SetDefault(ctx context.Context) {
+// SetDefaults sets the defaults for the SourceScaler.
+func (ss *SourceScaler) SetDefault(ctx context.Context) {
 	if ss == nil {
 		return
 	}

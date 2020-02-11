@@ -1425,7 +1425,7 @@
 
 [[projects]]
   branch = "scaling_v2"
-  digest = "1:d21a4bfff083d2364853504d11c48c884cd751ea648b524c73ba4781b238fdb3"
+  digest = "1:05a8e84295a1461623f58ced23ee9f9026b0636ad1a03a1edb7c264e480b7f74"
   name = "knative.dev/pkg"
   packages = [
     "apis",
@@ -1499,7 +1499,7 @@
     "webhook/resourcesemantics/validation",
   ]
   pruneopts = "T"
-  revision = "99c1bf4c5166904479c2ac25b76d5b2363399d73"
+  revision = "a61209eeb54d3d9fb54f8f17631f0993cb421593"
   source = "github.com/nachocano/pkg"
 
 [[projects]]
