@@ -63,8 +63,10 @@ func MakePullSubscription(args *PullSubscriptionArgs) *pubsubv1alpha1.PullSubscr
 			Topic:       args.Topic,
 			AdapterType: args.AdapterType,
 			Mode:        args.Mode,
-			SourceSpec: duckv1.SourceSpec{
-				Sink: args.Spec.SourceSpec.Sink,
+			KedaSourceSpec: duckv1.KedaSourceSpec{
+				SourceSpec: duckv1.SourceSpec{
+					Sink: args.Spec.SourceSpec.Sink,
+				},
 			},
 		},
 	}

@@ -191,7 +191,15 @@ var pullSubscriptionCondSet = apis.NewLivingConditionSet(
 
 // PullSubscriptionStatus defines the observed state of PullSubscription.
 type PullSubscriptionStatus struct {
-	duckv1.KedaSourceStatus `json:",inline"`
+	// inherits duck/v1beta1 Status, which currently provides:
+	// * ObservedGeneration - the 'Generation' of the Service that was last processed by the controller.
+	// * Conditions - the latest available observations of a resource's current state.
+	duckv1.Status `json:",inline"`
+
+	// SinkURI is the current active sink URI that has been configured for the
+	// PullSubscription.
+	// +optional
+	SinkURI string `json:"sinkUri,omitempty"`
 
 	// TransformerURI is the current active transformer URI that has been
 	// configured for the PullSubscription.
