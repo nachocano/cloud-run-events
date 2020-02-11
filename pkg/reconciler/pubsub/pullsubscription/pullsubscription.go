@@ -470,8 +470,7 @@ func (r *Reconciler) reconcileDataPlaneResources(ctx context.Context, src *v1alp
 		TracingConfig:  tracingConfig,
 	})
 
-	if src.IsScalable() {
-
+	if src.Spec.ScalerSpec != nil {
 		err = r.reconcileScalableResources(ctx, desired, src)
 		if err != nil {
 			logging.FromContext(ctx).Desugar().Error("Unable to reconcile an scalable resources", zap.Error(err))
