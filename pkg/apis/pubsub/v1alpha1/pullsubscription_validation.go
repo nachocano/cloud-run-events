@@ -90,7 +90,7 @@ func (current *PullSubscriptionSpec) Validate(ctx context.Context) *apis.FieldEr
 		errs = errs.Also(apis.ErrInvalidValue(current.Mode, "mode"))
 	}
 
-	// KedaScalerSpec [optional]
+	// Scaler [optional]
 	if current.Scaler != nil && !equality.Semantic.DeepEqual(current.Scaler, &duckv1alpha1.KedaScalerSpec{}) {
 		if err := current.Scaler.Validate(ctx); err != nil {
 			errs = errs.Also(err.ViaField("scaler"))
