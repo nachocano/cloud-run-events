@@ -97,5 +97,8 @@ func NewController(
 	cmw.Watch(metrics.ConfigMapName(), r.UpdateFromMetricsConfigMap)
 	cmw.Watch(tracingconfig.ConfigName, r.UpdateFromTracingConfigMap)
 
+	// TODO discovery, if keda not install fail.
+	// TODO watch ScaledObjects
+
 	return impl
 }
