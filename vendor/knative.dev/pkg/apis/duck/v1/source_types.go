@@ -66,7 +66,7 @@ type SourceSpec struct {
 	// options based on the scaling technology used.
 	// If not specified, the source is non-scalable.
 	// +optional
-	Scaler *ScalerSpec `json:"scalerSpec,omitempty"`
+	Scaler *ScalerSpec `json:"scaler,omitempty"`
 }
 
 // ScalerClass is the class of source scaler that a particular resource has opted into.
