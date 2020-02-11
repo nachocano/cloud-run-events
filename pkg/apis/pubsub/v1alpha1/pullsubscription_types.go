@@ -55,7 +55,7 @@ var _ = duck.VerifyType(&PullSubscription{}, &duckv1.Conditions{})
 // PullSubscriptionSpec defines the desired state of the PullSubscription.
 type PullSubscriptionSpec struct {
 	// This brings in CloudEventOverrides and Sink.
-	duckv1.SourceSpec `json:",inline"`
+	duckv1.KedaSourceSpec `json:",inline"`
 
 	// Secret is the credential to use to create and poll the PullSubscription
 	// Subscription. The value of the secret entry must be a service account
@@ -191,15 +191,7 @@ var pullSubscriptionCondSet = apis.NewLivingConditionSet(
 
 // PullSubscriptionStatus defines the observed state of PullSubscription.
 type PullSubscriptionStatus struct {
-	// inherits duck/v1beta1 Status, which currently provides:
-	// * ObservedGeneration - the 'Generation' of the Service that was last processed by the controller.
-	// * Conditions - the latest available observations of a resource's current state.
-	duckv1.Status `json:",inline"`
-
-	// SinkURI is the current active sink URI that has been configured for the
-	// PullSubscription.
-	// +optional
-	SinkURI string `json:"sinkUri,omitempty"`
+	duckv1.KedaSourceStatus `json:",inline"`
 
 	// TransformerURI is the current active transformer URI that has been
 	// configured for the PullSubscription.

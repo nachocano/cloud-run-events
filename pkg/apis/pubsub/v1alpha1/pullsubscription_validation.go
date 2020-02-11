@@ -89,11 +89,11 @@ func (current *PullSubscriptionSpec) Validate(ctx context.Context) *apis.FieldEr
 	}
 
 	// ScalerSpec [optional]
-	if current.Scaler != nil && !equality.Semantic.DeepEqual(current.Scaler, &duckv1.ScalerSpec{}) {
-		if err := current.Scaler.Validate(ctx); err != nil {
-			errs = errs.Also(err.ViaField("scaler"))
-		}
-	}
+	//if current.Scaler != nil && !equality.Semantic.DeepEqual(current.Scaler, &duckv1.ScalerSpec{}) {
+	//	if err := current.Scaler.Validate(ctx); err != nil {
+	//		errs = errs.Also(err.ViaField("scaler"))
+	//	}
+	//}
 
 	return errs
 }

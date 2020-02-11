@@ -59,7 +59,12 @@ func (ss *PullSubscriptionSpec) SetDefaults(ctx context.Context) {
 		ss.Mode = ModeCloudEventsBinary
 	}
 
-	if ss.Scaler != nil && !equality.Semantic.DeepEqual(ss.Scaler, &duckv1.ScalerSpec{}) {
-		ss.Scaler.SetDefault(ctx)
+	var min int32 = 0
+	var max int32 = 5
+	if ss.Scaler != nil && !equality.Semantic.DeepEqual(ss.Scaler, &duckv1.KedaScalerSpec{}) {
+		ss.Scaler.MinScale = &min
+		ss.Scaler.MaxScale = &max
+		ss.Scaler.Type = "gcp-pubsub"
+		ss.Scaler.Metadata = map[string]string{"subscriptionSize": "5"}
 	}
 }
