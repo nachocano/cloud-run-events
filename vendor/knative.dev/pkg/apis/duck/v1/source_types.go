@@ -61,12 +61,12 @@ type SourceSpec struct {
 	// +optional
 	CloudEventOverrides *CloudEventOverrides `json:"ceOverrides,omitempty"`
 
-	// ScalerSpec defines the scaling options for the source, e.g., whether it can
+	// Scaler defines the scaling options for the source, e.g., whether it can
 	// scale to zero, the maximum number of pods it can scale to, as well as particular
 	// options based on the scaling technology used.
 	// If not specified, the source is non-scalable.
-	// + optional
-	ScalerSpec *ScalerSpec `json:"scalerSpec,omitempty"`
+	// +optional
+	Scaler *ScalerSpec `json:"scalerSpec,omitempty"`
 }
 
 // ScalerClass is the class of source scaler that a particular resource has opted into.
@@ -93,6 +93,7 @@ const (
 type ScalerSpec struct {
 	// Class defines the class of scaler to use.
 	Class ScalerClass `json:"class,omitempty"`
+
 	// MinScale defines the minimum scale for the source.
 	// If not specified, defaults to zero.
 	// +optional
@@ -227,7 +228,7 @@ func (s *Source) Populate() {
 	s.Spec.CloudEventOverrides = &CloudEventOverrides{
 		Extensions: map[string]string{"boosh": "kakow"},
 	}
-	s.Spec.ScalerSpec = &ScalerSpec{
+	s.Spec.Scaler = &ScalerSpec{
 		Class:    ScalerClassKsvc,
 		MinScale: utilpointer.Int32Ptr(0),
 		MaxScale: utilpointer.Int32Ptr(1),
@@ -251,9 +252,9 @@ func (s *Source) Populate() {
 	}
 }
 
-// IsScalable returns true if the Source has been configured with scaling options.
-func (src *Source) IsScalable() bool {
-	return src.Spec.ScalerSpec != nil
+// IsScalable returns true if the SourceSpec has been configured with scaling options.
+func (ss *SourceSpec) IsScalable() bool {
+	return ss.Scaler != nil
 }
 
 // GetListType implements apis.Listable
