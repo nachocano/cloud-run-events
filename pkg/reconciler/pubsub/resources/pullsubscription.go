@@ -19,6 +19,7 @@ package resources
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
+	pkgduckv1alpha1 "knative.dev/pkg/apis/duck/v1alpha1"
 	"knative.dev/pkg/kmeta"
 
 	duckv1alpha1 "github.com/google/knative-gcp/pkg/apis/duck/v1alpha1"
@@ -63,7 +64,7 @@ func MakePullSubscription(args *PullSubscriptionArgs) *pubsubv1alpha1.PullSubscr
 			Topic:       args.Topic,
 			AdapterType: args.AdapterType,
 			Mode:        args.Mode,
-			KedaSourceSpec: duckv1.KedaSourceSpec{
+			KedaSourceSpec: pkgduckv1alpha1.KedaSourceSpec{
 				SourceSpec: duckv1.SourceSpec{
 					Sink: args.Spec.SourceSpec.Sink,
 				},
