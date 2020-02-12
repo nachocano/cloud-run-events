@@ -46,6 +46,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, key string) error {
 }
 
 func (r *Reconciler) ReconcileScaledObject(ctx context.Context, ra *appsv1.Deployment, src *v1alpha1.PullSubscription) error {
+	// TODO discovery
+	// TODO reconcileDeployment but do not consider replicas.
+	// TODO reconcileScaledObject... if we created a new deployment
+	// TODO upstream to pkg
+	// TODO tracker
+
 	gvr, _ := meta.UnsafeGuessKindToResource(resources.ScaledObjectGVK)
 	scaledObjectResourceInterface := r.DynamicClientSet.Resource(gvr).Namespace(src.Namespace)
 	if scaledObjectResourceInterface == nil {

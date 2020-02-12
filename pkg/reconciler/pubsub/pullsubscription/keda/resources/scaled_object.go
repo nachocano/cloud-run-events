@@ -44,7 +44,8 @@ func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullS
 			"kind":       "ScaledObject",
 			"metadata": map[string]interface{}{
 				"namespace": ps.Namespace,
-				"name":      ps.Name,
+				// TODO autogenerate the name using the UID
+				"name": ps.Name,
 				"labels": map[string]interface{}{
 					"deploymentName": ra.Name,
 				},
