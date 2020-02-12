@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"k8s.io/client-go/tools/cache"
 	"time"
 
 	"go.uber.org/zap"
@@ -29,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -74,14 +76,85 @@ type Base struct {
 	MetricsConfig *metrics.ExporterOptions
 	TracingConfig *tracingconfig.Config
 
-	// createClientFn is the function used to create the Pub/Sub client that interacts with Pub/Sub.
+	// CreateClientFn is the function used to create the Pub/Sub client that interacts with Pub/Sub.
 	// This is needed so that we can inject a mock client for UTs purposes.
 	CreateClientFn gpubsub.CreateFn
+
+	// ReconcileFn is the function used to reconcile the data plane resources.
+	ReconcileFn ReconcileFunc
 }
 
 type ReconcileFunc func(ctx context.Context, d *appsv1.Deployment, ps *v1alpha1.PullSubscription) error
 
-func (r *Base) Reconcile(ctx context.Context, ps *v1alpha1.PullSubscription, f ReconcileFunc) error {
+// Reconcile compares the actual state with the desired, and attempts to
+// converge the two. It then updates the Status block of the PullSubscription resource
+// with the current status of the resource.
+func (r *Base) Reconcile(ctx context.Context, key string) error {
+	// Convert the namespace/name string into a distinct namespace and name
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		logging.FromContext(ctx).Desugar().Error("Invalid resource key")
+		return nil
+	}
+	// Get the PullSubscription resource with this namespace/name
+	original, err := r.PullSubscriptionLister.PullSubscriptions(namespace).Get(name)
+	if apierrs.IsNotFound(err) {
+		// The resource may no longer exist, in which case we stop processing.
+		logging.FromContext(ctx).Desugar().Error("PullSubscription in work queue no longer exists")
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	// Don't modify the informers copy
+	ps := original.DeepCopy()
+
+	// Reconcile this copy of the PullSubscription and then write back any status
+	// updates regardless of whether the reconciliation errored out.
+	var reconcileErr = r.reconcile(ctx, ps)
+
+	// If no error is returned, mark the observed generation.
+	// This has to be done before updateStatus is called.
+	if reconcileErr == nil {
+		ps.Status.ObservedGeneration = ps.Generation
+	}
+
+	if equality.Semantic.DeepEqual(original.Finalizers, ps.Finalizers) {
+		// If we didn't change finalizers then don't call updateFinalizers.
+
+	} else if _, updated, fErr := r.UpdateFinalizers(ctx, ps); fErr != nil {
+		logging.FromContext(ctx).Desugar().Warn("Failed to update PullSubscription finalizers", zap.Error(fErr))
+		r.Recorder.Eventf(ps, corev1.EventTypeWarning, "UpdateFailed",
+			"Failed to update finalizers for PullSubscription %q: %v", ps.Name, fErr)
+		return fErr
+	} else if updated {
+		// There was a difference and updateFinalizers said it updated and did not return an error.
+		r.Recorder.Eventf(ps, corev1.EventTypeNormal, "Updated", "Updated PullSubscription %q finalizers", ps.Name)
+	}
+
+	if equality.Semantic.DeepEqual(original.Status, ps.Status) {
+		// If we didn't change anything then don't call updateStatus.
+		// This is important because the copy we loaded from the informer's
+		// cache may be stale and we don't want to overwrite a prior update
+		// to status with this stale state.
+
+	} else if uErr := r.UpdateStatus(ctx, original, ps); uErr != nil {
+		logging.FromContext(ctx).Desugar().Warn("Failed to update ps status", zap.Error(uErr))
+		r.Recorder.Eventf(ps, corev1.EventTypeWarning, "UpdateFailed",
+			"Failed to update status for PullSubscription %q: %v", ps.Name, uErr)
+		return uErr
+	} else if reconcileErr == nil {
+		// There was a difference and updateStatus did not return an error.
+		r.Recorder.Eventf(ps, corev1.EventTypeNormal, "Updated", "Updated PullSubscription %q", ps.Name)
+	}
+	if reconcileErr != nil {
+		r.Recorder.Event(ps, corev1.EventTypeWarning, "InternalError", reconcileErr.Error())
+	}
+
+	return reconcileErr
+}
+
+func (r *Base) reconcile(ctx context.Context, ps *v1alpha1.PullSubscription) error {
 	ctx = logging.WithLogger(ctx, r.Logger.With(zap.Any("pullsubscription", ps)))
 
 	ps.Status.InitializeConditions()
@@ -130,7 +203,7 @@ func (r *Base) Reconcile(ctx context.Context, ps *v1alpha1.PullSubscription, f R
 	}
 	ps.Status.MarkSubscribed(subscriptionID)
 
-	err = r.reconcileDataPlaneResources(ctx, ps, f)
+	err = r.reconcileDataPlaneResources(ctx, ps, r.ReconcileFn)
 	if err != nil {
 		ps.Status.MarkNotDeployed("DataPlaneReconcileFailed", "Failed to reconcile Data Plane resource(s): %s", err.Error())
 	}
