@@ -119,6 +119,9 @@ func MakeReceiveAdapter(ctx context.Context, args *ReceiveAdapterArgs) *v1.Deplo
 							Name:  "GOOGLE_APPLICATION_CREDENTIALS",
 							Value: credsFile,
 						}, {
+							Name:      "GOOGLE_APPLICATION_CREDENTIALS_JSON",
+							ValueFrom: &corev1.EnvVarSource{SecretKeyRef: secret},
+						}, {
 							Name:  "PROJECT_ID",
 							Value: args.Source.Spec.Project,
 						}, {
