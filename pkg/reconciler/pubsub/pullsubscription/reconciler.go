@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Google LLC
+Copyright 2020 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,20 +29,15 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apierrs "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	appsv1listers "k8s.io/client-go/listers/apps/v1"
-	"k8s.io/client-go/tools/cache"
-
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 	"knative.dev/pkg/reconciler"
 	tracingconfig "knative.dev/pkg/tracing/config"
 
-	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/metrics"
 	"knative.dev/pkg/resolver"
@@ -59,104 +54,34 @@ const (
 	// Component names for metrics.
 	sourceComponent  = "source"
 	channelComponent = "channel"
-
-	finalizerName = controllerAgentName
 )
 
-// Reconciler implements controller.Reconciler for PullSubscription resources.
-type Reconciler struct {
+// Base implements the core controller logic for pullsubscription.
+type Base struct {
 	*pubsub.PubSubBase
+	// DeploymentLister index properties about deployments.
+	DeploymentLister appsv1listers.DeploymentLister
+	// PullSubscriptionLister index properties about pullsubscriptions.
+	PullSubscriptionLister listers.PullSubscriptionLister
 
-	// deploymentLister index properties about deployments.
-	deploymentLister appsv1listers.DeploymentLister
-	// pullSubscriptionLister index properties about pullsubscriptions.
-	pullSubscriptionLister listers.PullSubscriptionLister
+	UriResolver *resolver.URIResolver
 
-	uriResolver *resolver.URIResolver
+	ReceiveAdapterImage string
+	ControllerAgentName string
+	FinalizerName       string
 
-	receiveAdapterImage string
-
-	loggingConfig *logging.Config
-	metricsConfig *metrics.ExporterOptions
-	tracingConfig *tracingconfig.Config
+	LoggingConfig *logging.Config
+	MetricsConfig *metrics.ExporterOptions
+	TracingConfig *tracingconfig.Config
 
 	// createClientFn is the function used to create the Pub/Sub client that interacts with Pub/Sub.
 	// This is needed so that we can inject a mock client for UTs purposes.
-	createClientFn gpubsub.CreateFn
+	CreateClientFn gpubsub.CreateFn
 }
 
-// Check that our Reconciler implements controller.Reconciler
-var _ controller.Reconciler = (*Reconciler)(nil)
+type ReconcileFunc func(ctx context.Context, d *appsv1.Deployment, ps *v1alpha1.PullSubscription) error
 
-// Reconcile compares the actual state with the desired, and attempts to
-// converge the two. It then updates the Status block of the PullSubscription resource
-// with the current status of the resource.
-func (r *Reconciler) Reconcile(ctx context.Context, key string) error {
-	// Convert the namespace/name string into a distinct namespace and name
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		logging.FromContext(ctx).Desugar().Error("Invalid resource key")
-		return nil
-	}
-	// Get the PullSubscription resource with this namespace/name
-	original, err := r.pullSubscriptionLister.PullSubscriptions(namespace).Get(name)
-	if apierrs.IsNotFound(err) {
-		// The resource may no longer exist, in which case we stop processing.
-		logging.FromContext(ctx).Desugar().Error("PullSubscription in work queue no longer exists")
-		return nil
-	} else if err != nil {
-		return err
-	}
-
-	// Don't modify the informers copy
-	ps := original.DeepCopy()
-
-	// Reconcile this copy of the PullSubscription and then write back any status
-	// updates regardless of whether the reconciliation errored out.
-	var reconcileErr = r.reconcile(ctx, ps)
-
-	// If no error is returned, mark the observed generation.
-	// This has to be done before updateStatus is called.
-	if reconcileErr == nil {
-		ps.Status.ObservedGeneration = ps.Generation
-	}
-
-	if equality.Semantic.DeepEqual(original.Finalizers, ps.Finalizers) {
-		// If we didn't change finalizers then don't call updateFinalizers.
-
-	} else if _, updated, fErr := r.updateFinalizers(ctx, ps); fErr != nil {
-		logging.FromContext(ctx).Desugar().Warn("Failed to update PullSubscription finalizers", zap.Error(fErr))
-		r.Recorder.Eventf(ps, corev1.EventTypeWarning, "UpdateFailed",
-			"Failed to update finalizers for PullSubscription %q: %v", ps.Name, fErr)
-		return fErr
-	} else if updated {
-		// There was a difference and updateFinalizers said it updated and did not return an error.
-		r.Recorder.Eventf(ps, corev1.EventTypeNormal, "Updated", "Updated PullSubscription %q finalizers", ps.Name)
-	}
-
-	if equality.Semantic.DeepEqual(original.Status, ps.Status) {
-		// If we didn't change anything then don't call updateStatus.
-		// This is important because the copy we loaded from the informer's
-		// cache may be stale and we don't want to overwrite a prior update
-		// to status with this stale state.
-
-	} else if uErr := r.updateStatus(ctx, original, ps); uErr != nil {
-		logging.FromContext(ctx).Desugar().Warn("Failed to update ps status", zap.Error(uErr))
-		r.Recorder.Eventf(ps, corev1.EventTypeWarning, "UpdateFailed",
-			"Failed to update status for PullSubscription %q: %v", ps.Name, uErr)
-		return uErr
-	} else if reconcileErr == nil {
-		// There was a difference and updateStatus did not return an error.
-		r.Recorder.Eventf(ps, corev1.EventTypeNormal, "Updated", "Updated PullSubscription %q", ps.Name)
-	}
-	if reconcileErr != nil {
-		r.Recorder.Event(ps, corev1.EventTypeWarning, "InternalError", reconcileErr.Error())
-	}
-
-	return reconcileErr
-}
-
-func (r *Reconciler) reconcile(ctx context.Context, ps *v1alpha1.PullSubscription) error {
+func (r *Base) Reconcile(ctx context.Context, ps *v1alpha1.PullSubscription, f ReconcileFunc) error {
 	ctx = logging.WithLogger(ctx, r.Logger.With(zap.Any("pullsubscription", ps)))
 
 	ps.Status.InitializeConditions()
@@ -169,7 +94,7 @@ func (r *Reconciler) reconcile(ctx context.Context, ps *v1alpha1.PullSubscriptio
 		}
 		ps.Status.MarkNoSubscription("SubscriptionDeleted", "Successfully deleted Pub/Sub subscription %q", ps.Status.SubscriptionID)
 		ps.Status.SubscriptionID = ""
-		removeFinalizer(ps)
+		r.removeFinalizer(ps)
 		return nil
 	}
 
@@ -196,7 +121,7 @@ func (r *Reconciler) reconcile(ctx context.Context, ps *v1alpha1.PullSubscriptio
 		ps.Status.TransformerURI = ""
 	}
 
-	addFinalizer(ps)
+	r.addFinalizer(ps)
 
 	subscriptionID, err := r.reconcileSubscription(ctx, ps)
 	if err != nil {
@@ -205,16 +130,17 @@ func (r *Reconciler) reconcile(ctx context.Context, ps *v1alpha1.PullSubscriptio
 	}
 	ps.Status.MarkSubscribed(subscriptionID)
 
-	err = r.reconcileDataPlaneResources(ctx, ps)
+	err = r.reconcileDataPlaneResources(ctx, ps, f)
 	if err != nil {
 		ps.Status.MarkNotDeployed("DataPlaneReconcileFailed", "Failed to reconcile Data Plane resource(s): %s", err.Error())
 	}
 	ps.Status.MarkDeployed()
 
 	return nil
+
 }
 
-func (r *Reconciler) reconcileSubscription(ctx context.Context, ps *v1alpha1.PullSubscription) (string, error) {
+func (r *Base) reconcileSubscription(ctx context.Context, ps *v1alpha1.PullSubscription) (string, error) {
 	if ps.Status.ProjectID == "" {
 		projectID, err := utils.ProjectID(ps.Spec.Project)
 		if err != nil {
@@ -227,7 +153,7 @@ func (r *Reconciler) reconcileSubscription(ctx context.Context, ps *v1alpha1.Pul
 
 	// Auth to GCP is handled by having the GOOGLE_APPLICATION_CREDENTIALS environment variable
 	// pointing at a credential file.
-	client, err := r.createClientFn(ctx, ps.Status.ProjectID)
+	client, err := r.CreateClientFn(ctx, ps.Status.ProjectID)
 	if err != nil {
 		logging.FromContext(ctx).Desugar().Error("Failed to create Pub/Sub client", zap.Error(err))
 		return "", err
@@ -290,21 +216,20 @@ func (r *Reconciler) reconcileSubscription(ctx context.Context, ps *v1alpha1.Pul
 		}
 	}
 	// TODO update the subscription's config if needed.
-
 	return subID, nil
 }
 
 // deleteSubscription looks at the status.SubscriptionID and if non-empty,
 // hence indicating that we have created a subscription successfully
 // in the PullSubscription, remove it.
-func (r *Reconciler) deleteSubscription(ctx context.Context, ps *v1alpha1.PullSubscription) error {
+func (r *Base) deleteSubscription(ctx context.Context, ps *v1alpha1.PullSubscription) error {
 	if ps.Status.SubscriptionID == "" {
 		return nil
 	}
 
 	// At this point the project ID should have been populated in the status.
 	// Querying Pub/Sub as the subscription could have been deleted outside the cluster (e.g, through gcloud).
-	client, err := r.createClientFn(ctx, ps.Status.ProjectID)
+	client, err := r.CreateClientFn(ctx, ps.Status.ProjectID)
 	if err != nil {
 		logging.FromContext(ctx).Desugar().Error("Failed to create Pub/Sub client", zap.Error(err))
 		return err
@@ -327,19 +252,7 @@ func (r *Reconciler) deleteSubscription(ctx context.Context, ps *v1alpha1.PullSu
 	return nil
 }
 
-func (r *Reconciler) resolveDestination(ctx context.Context, destination duckv1.Destination, ps *v1alpha1.PullSubscription) (string, error) {
-	// Setting up the namespace.
-	if destination.Ref != nil {
-		destination.Ref.Namespace = ps.Namespace
-	}
-	url, err := r.uriResolver.URIFromDestinationV1(destination, ps)
-	if err != nil {
-		return "", err
-	}
-	return url.String(), nil
-}
-
-func (r *Reconciler) updateStatus(ctx context.Context, original *v1alpha1.PullSubscription, desired *v1alpha1.PullSubscription) error {
+func (r *Base) UpdateStatus(ctx context.Context, original *v1alpha1.PullSubscription, desired *v1alpha1.PullSubscription) error {
 	existing := original.DeepCopy()
 	return reconciler.RetryUpdateConflicts(func(attempts int) (err error) {
 		// The first iteration tries to use the informer's state, subsequent attempts fetch the latest state via API.
@@ -371,10 +284,10 @@ func (r *Reconciler) updateStatus(ctx context.Context, original *v1alpha1.PullSu
 	})
 }
 
-// updateFinalizers is a generic method for future compatibility with a
+// UpdateFinalizers is a generic method for future compatibility with a
 // reconciler SDK.
-func (r *Reconciler) updateFinalizers(ctx context.Context, desired *v1alpha1.PullSubscription) (*v1alpha1.PullSubscription, bool, error) {
-	source, err := r.pullSubscriptionLister.PullSubscriptions(desired.Namespace).Get(desired.Name)
+func (r *Base) UpdateFinalizers(ctx context.Context, desired *v1alpha1.PullSubscription) (*v1alpha1.PullSubscription, bool, error) {
+	source, err := r.PullSubscriptionLister.PullSubscriptions(desired.Namespace).Get(desired.Name)
 	if err != nil {
 		return nil, false, err
 	}
@@ -388,20 +301,20 @@ func (r *Reconciler) updateFinalizers(ctx context.Context, desired *v1alpha1.Pul
 	existingFinalizers := sets.NewString(existing.Finalizers...)
 	desiredFinalizers := sets.NewString(desired.Finalizers...)
 
-	if desiredFinalizers.Has(finalizerName) {
-		if existingFinalizers.Has(finalizerName) {
+	if desiredFinalizers.Has(r.FinalizerName) {
+		if existingFinalizers.Has(r.FinalizerName) {
 			// Nothing to do.
 			return desired, false, nil
 		}
 		// Add the finalizer.
-		finalizers = append(existing.Finalizers, finalizerName)
+		finalizers = append(existing.Finalizers, r.FinalizerName)
 	} else {
-		if !existingFinalizers.Has(finalizerName) {
+		if !existingFinalizers.Has(r.FinalizerName) {
 			// Nothing to do.
 			return desired, false, nil
 		}
 		// Remove the finalizer.
-		existingFinalizers.Delete(finalizerName)
+		existingFinalizers.Delete(r.FinalizerName)
 		finalizers = existingFinalizers.List()
 	}
 
@@ -421,47 +334,47 @@ func (r *Reconciler) updateFinalizers(ctx context.Context, desired *v1alpha1.Pul
 	return update, true, err
 }
 
-func addFinalizer(s *v1alpha1.PullSubscription) {
+func (r *Base) addFinalizer(s *v1alpha1.PullSubscription) {
 	finalizers := sets.NewString(s.Finalizers...)
-	finalizers.Insert(finalizerName)
+	finalizers.Insert(r.FinalizerName)
 	s.Finalizers = finalizers.List()
 }
 
-func removeFinalizer(s *v1alpha1.PullSubscription) {
+func (r *Base) removeFinalizer(s *v1alpha1.PullSubscription) {
 	finalizers := sets.NewString(s.Finalizers...)
-	finalizers.Delete(finalizerName)
+	finalizers.Delete(r.FinalizerName)
 	s.Finalizers = finalizers.List()
 }
 
-func (r *Reconciler) reconcileDataPlaneResources(ctx context.Context, src *v1alpha1.PullSubscription) error {
-	loggingConfig, err := logging.LoggingConfigToJson(r.loggingConfig)
+func (r *Base) reconcileDataPlaneResources(ctx context.Context, src *v1alpha1.PullSubscription, f ReconcileFunc) error {
+	loggingConfig, err := logging.LoggingConfigToJson(r.LoggingConfig)
 	if err != nil {
 		logging.FromContext(ctx).Desugar().Error("Error serializing existing logging config", zap.Error(err))
 	}
 
-	if r.metricsConfig != nil {
+	if r.MetricsConfig != nil {
 		component := sourceComponent
 		// Set the metric component based on the channel label.
 		if _, ok := src.Labels["events.cloud.google.com/channel"]; ok {
 			component = channelComponent
 		}
-		r.metricsConfig.Component = component
+		r.MetricsConfig.Component = component
 	}
 
-	metricsConfig, err := metrics.MetricsOptionsToJson(r.metricsConfig)
+	metricsConfig, err := metrics.MetricsOptionsToJson(r.MetricsConfig)
 	if err != nil {
 		logging.FromContext(ctx).Desugar().Error("Error serializing metrics config", zap.Error(err))
 	}
 
-	tracingConfig, err := tracing.ConfigToJSON(r.tracingConfig)
+	tracingConfig, err := tracing.ConfigToJSON(r.TracingConfig)
 	if err != nil {
 		logging.FromContext(ctx).Desugar().Error("Error serializing tracing config", zap.Error(err))
 	}
 
 	desired := resources.MakeReceiveAdapter(ctx, &resources.ReceiveAdapterArgs{
-		Image:          r.receiveAdapterImage,
+		Image:          r.ReceiveAdapterImage,
 		Source:         src,
-		Labels:         resources.GetLabels(controllerAgentName, src.Name),
+		Labels:         resources.GetLabels(r.ControllerAgentName, src.Name),
 		SubscriptionID: src.Status.SubscriptionID,
 		SinkURI:        src.Status.SinkURI,
 		TransformerURI: src.Status.TransformerURI,
@@ -470,32 +383,11 @@ func (r *Reconciler) reconcileDataPlaneResources(ctx context.Context, src *v1alp
 		TracingConfig:  tracingConfig,
 	})
 
-	if src.Spec.Scaler != nil {
-		err = r.reconcileScalableResources(ctx, desired, src)
-		if err != nil {
-			logging.FromContext(ctx).Desugar().Error("Unable to reconcile an scalable resources", zap.Error(err))
-			return err
-		}
-	} else {
-		existing, err := r.getOrCreateReceiveAdapter(ctx, desired, src)
-		if err != nil {
-			return err
-		}
-		if !equality.Semantic.DeepDerivative(desired.Spec, existing.Spec) {
-			existing.Spec = desired.Spec
-			_, err := r.KubeClientSet.AppsV1().Deployments(src.Namespace).Update(existing)
-			if err != nil {
-				logging.FromContext(ctx).Desugar().Error("Error updating Receive Adapter", zap.Error(err))
-				return err
-			}
-			return nil
-		}
-	}
-	return nil
+	return f(ctx, desired, src)
 }
 
-func (r *Reconciler) getOrCreateReceiveAdapter(ctx context.Context, desired *appsv1.Deployment, src *v1alpha1.PullSubscription) (*appsv1.Deployment, error) {
-	existing, err := r.getReceiveAdapter(ctx, src)
+func (r *Base) GetOrCreateReceiveAdapter(ctx context.Context, desired *appsv1.Deployment, src *v1alpha1.PullSubscription) (*appsv1.Deployment, error) {
+	existing, err := r.GetReceiveAdapter(ctx, src)
 	if err != nil && !apierrors.IsNotFound(err) {
 		logging.FromContext(ctx).Desugar().Error("Unable to get an existing Receive Adapter", zap.Error(err))
 		return nil, err
@@ -510,9 +402,9 @@ func (r *Reconciler) getOrCreateReceiveAdapter(ctx context.Context, desired *app
 	return existing, nil
 }
 
-func (r *Reconciler) getReceiveAdapter(ctx context.Context, src *v1alpha1.PullSubscription) (*appsv1.Deployment, error) {
+func (r *Base) GetReceiveAdapter(ctx context.Context, src *v1alpha1.PullSubscription) (*appsv1.Deployment, error) {
 	dl, err := r.KubeClientSet.AppsV1().Deployments(src.Namespace).List(metav1.ListOptions{
-		LabelSelector: resources.GetLabelSelector(controllerAgentName, src.Name).String(),
+		LabelSelector: resources.GetLabelSelector(r.ControllerAgentName, src.Name).String(),
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: appsv1.SchemeGroupVersion.String(),
 			Kind:       "Deployment",
@@ -531,39 +423,7 @@ func (r *Reconciler) getReceiveAdapter(ctx context.Context, src *v1alpha1.PullSu
 	return nil, apierrors.NewNotFound(schema.GroupResource{}, "")
 }
 
-func (r *Reconciler) reconcileScalableResources(ctx context.Context, ra *appsv1.Deployment, src *v1alpha1.PullSubscription) error {
-	gvr, _ := meta.UnsafeGuessKindToResource(resources.ScaledObjectGVK)
-	scaledObjectResourceInterface := r.DynamicClientSet.Resource(gvr).Namespace(src.Namespace)
-	if scaledObjectResourceInterface == nil {
-		return fmt.Errorf("unable to create dynamic client for ScaledObject")
-	}
-
-	so := resources.MakeScaledObject(ctx, ra, src)
-	_, err := scaledObjectResourceInterface.Get(so.GetName(), metav1.GetOptions{})
-	if err != nil {
-		if apierrs.IsNotFound(err) {
-			// If there is no scaledObject, we need to create the deployment as well,
-			// so that the ScaledObject can set it as its scaleTargetRef.
-			_, err := r.getOrCreateReceiveAdapter(ctx, ra, src)
-			if err != nil {
-				logging.FromContext(ctx).Desugar().Error("Failed to get or create Receive Adapter in order to create the ScaledObject", zap.Error(err))
-				return err
-			}
-			// Note that the ScaledObject is the one in charge of reconciling the Deployment, e.g., by changing the number
-			// of replicas.
-			_, err = scaledObjectResourceInterface.Create(so, metav1.CreateOptions{})
-			if err != nil {
-				logging.FromContext(ctx).Desugar().Error("Failed to create ScaledObject", zap.Any("so", so), zap.Error(err))
-				return err
-			}
-		} else {
-			logging.FromContext(ctx).Desugar().Error("Failed to get ScaledObject", zap.Any("so", so), zap.Error(err))
-		}
-	}
-	return nil
-}
-
-func (r *Reconciler) UpdateFromLoggingConfigMap(cfg *corev1.ConfigMap) {
+func (r *Base) UpdateFromLoggingConfigMap(cfg *corev1.ConfigMap) {
 	if cfg != nil {
 		delete(cfg.Data, "_example")
 	}
@@ -573,12 +433,12 @@ func (r *Reconciler) UpdateFromLoggingConfigMap(cfg *corev1.ConfigMap) {
 		r.Logger.Warnw("Failed to create logging config from configmap", zap.String("cfg.Name", cfg.Name))
 		return
 	}
-	r.loggingConfig = logcfg
+	r.LoggingConfig = logcfg
 	r.Logger.Debugw("Update from logging ConfigMap", zap.Any("loggingCfg", cfg))
 	// TODO: requeue all PullSubscriptions. See https://github.com/google/knative-gcp/issues/457.
 }
 
-func (r *Reconciler) UpdateFromMetricsConfigMap(cfg *corev1.ConfigMap) {
+func (r *Base) UpdateFromMetricsConfigMap(cfg *corev1.ConfigMap) {
 	if cfg != nil {
 		delete(cfg.Data, "_example")
 	}
@@ -586,14 +446,14 @@ func (r *Reconciler) UpdateFromMetricsConfigMap(cfg *corev1.ConfigMap) {
 	// Cannot set the component here as we don't know if its a source or a channel.
 	// Will set that up dynamically before creating the receive adapter.
 	// Won't be able to requeue the PullSubscriptions.
-	r.metricsConfig = &metrics.ExporterOptions{
+	r.MetricsConfig = &metrics.ExporterOptions{
 		Domain:    metrics.Domain(),
 		ConfigMap: cfg.Data,
 	}
 	r.Logger.Debugw("Update from metrics ConfigMap", zap.Any("metricsCfg", cfg))
 }
 
-func (r *Reconciler) UpdateFromTracingConfigMap(cfg *corev1.ConfigMap) {
+func (r *Base) UpdateFromTracingConfigMap(cfg *corev1.ConfigMap) {
 	if cfg == nil {
 		r.Logger.Error("Tracing ConfigMap is nil")
 		return
@@ -605,7 +465,19 @@ func (r *Reconciler) UpdateFromTracingConfigMap(cfg *corev1.ConfigMap) {
 		r.Logger.Warnw("Failed to create tracing config from configmap", zap.String("cfg.Name", cfg.Name))
 		return
 	}
-	r.tracingConfig = tracingCfg
-	r.Logger.Debugw("Updated Tracing config", zap.Any("tracingCfg", r.tracingConfig))
+	r.TracingConfig = tracingCfg
+	r.Logger.Debugw("Updated Tracing config", zap.Any("tracingCfg", r.TracingConfig))
 	// TODO: requeue all PullSubscriptions. See https://github.com/google/knative-gcp/issues/457.
+}
+
+func (r *Base) resolveDestination(ctx context.Context, destination duckv1.Destination, ps *v1alpha1.PullSubscription) (string, error) {
+	// Setting up the namespace.
+	if destination.Ref != nil {
+		destination.Ref.Namespace = ps.Namespace
+	}
+	url, err := r.UriResolver.URIFromDestinationV1(destination, ps)
+	if err != nil {
+		return "", err
+	}
+	return url.String(), nil
 }
