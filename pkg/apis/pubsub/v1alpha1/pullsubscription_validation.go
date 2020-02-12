@@ -18,9 +18,12 @@ package v1alpha1
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"time"
 
 	duckv1 "knative.dev/pkg/apis/duck/v1"
+	duckv1alpha1 "knative.dev/pkg/apis/duck/v1alpha1"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -38,7 +41,9 @@ const (
 )
 
 func (current *PullSubscription) Validate(ctx context.Context) *apis.FieldError {
-	return current.Spec.Validate(ctx).ViaField("spec")
+	errs := current.Spec.Validate(ctx).ViaField("spec")
+	errs = current.validateSourceScalerAnnotation(ctx, errs)
+	return errs
 }
 
 func (current *PullSubscriptionSpec) Validate(ctx context.Context) *apis.FieldError {
@@ -88,6 +93,39 @@ func (current *PullSubscriptionSpec) Validate(ctx context.Context) *apis.FieldEr
 		errs = errs.Also(apis.ErrInvalidValue(current.Mode, "mode"))
 	}
 
+	// Scaler [optional]
+	if current.Scaler != nil && !equality.Semantic.DeepEqual(current.Scaler, &duckv1alpha1.KedaScalerSpec{}) {
+		if err := current.Scaler.Validate(ctx); err != nil {
+			errs = errs.Also(err.ViaField("scaler"))
+		}
+
+		if current.Scaler.Type != defaultScalerType {
+			errs = errs.Also(apis.ErrInvalidValue(current.Scaler.Type, "scaler.type"))
+		}
+
+		field := fmt.Sprintf("scaler.metadata[%s]", subscriptionSize)
+		if val, ok := current.Scaler.Metadata[subscriptionSize]; !ok {
+			errs = errs.Also(apis.ErrMissingField(field))
+		} else if _, err := strconv.Atoi(val); err != nil {
+			errs = errs.Also(apis.ErrInvalidValue(val, field))
+		}
+	}
+
+	return errs
+}
+
+// validateSourceScalerAnnotation validates that if the spec.scaler was configured, it should have the KEDA annotation.
+// This ensures that we reconcile using the corresponding controller.
+// TODO make this available for other Sources.
+func (current *PullSubscription) validateSourceScalerAnnotation(ctx context.Context, errs *apis.FieldError) *apis.FieldError {
+	if current.Spec.Scaler != nil && !equality.Semantic.DeepEqual(current.Spec.Scaler, &duckv1alpha1.KedaScalerSpec{}) {
+		field := fmt.Sprintf("metadata.annotations[%s]", duckv1alpha1.SourceScalerAnnotationKey)
+		if annotationValue, ok := current.GetAnnotations()[duckv1alpha1.SourceScalerAnnotationKey]; !ok {
+			errs = errs.Also(apis.ErrMissingField(field))
+		} else if annotationValue != duckv1alpha1.KEDA {
+			errs = errs.Also(apis.ErrInvalidValue(field, annotationValue))
+		}
+	}
 	return errs
 }
 
