@@ -235,9 +235,9 @@ func (ss *SourceScaler) SetDefault(ctx context.Context) {
 		return
 	}
 	if ss.MinScale == nil {
-		ss.MinScale = utilpointer.Int32Ptr(defaultMinScale)
+		ss.MinScale = ptr.Int32(defaultMinScale)
 	}
 	if ss.MaxScale == nil {
-		ss.MaxScale = utilpointer.Int32Ptr(defaultMaxScale)
+		ss.MaxScale = ptr.Int32(defaultMaxScale)
 	}
 }

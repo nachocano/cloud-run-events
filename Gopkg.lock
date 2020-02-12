@@ -1425,7 +1425,7 @@
 
 [[projects]]
   branch = "scaling_v2"
-  digest = "1:baebc691825723fd6c19510709e20b57f2217b1df8730d0ce31ae87a63d531ea"
+  digest = "1:7411de28578958809c609a114f9376fe19b857146361321d969ad6c36d31abf1"
   name = "knative.dev/pkg"
   packages = [
     "apis",
@@ -1499,7 +1499,7 @@
     "webhook/resourcesemantics/validation",
   ]
   pruneopts = "T"
-  revision = "feff46730c43fe39ecac66b749428708915b4e41"
+  revision = "f0a5b11b2b4e186a8073228a0f649a6235ed7b70"
   source = "github.com/nachocano/pkg"
 
 [[projects]]
@@ -1723,7 +1723,6 @@
     "knative.dev/pkg/webhook/resourcesemantics",
     "knative.dev/pkg/webhook/resourcesemantics/defaulting",
     "knative.dev/pkg/webhook/resourcesemantics/validation",
-    "knative.dev/serving/pkg/apis/autoscaling",
     "knative.dev/serving/pkg/apis/serving/v1",
     "knative.dev/serving/pkg/apis/serving/v1alpha1",
     "knative.dev/serving/pkg/apis/serving/v1beta1",
