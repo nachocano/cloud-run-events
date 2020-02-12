@@ -26,7 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	utilpointer "k8s.io/utils/pointer"
+	"knative.dev/pkg/ptr"
 
 	"knative.dev/pkg/apis"
 	"knative.dev/pkg/apis/duck"
@@ -175,11 +175,11 @@ func (s *KedaSource) Populate() {
 	}
 	s.Spec.Scaler = &KedaScalerSpec{
 		SourceScaler: SourceScaler{
-			MinScale: utilpointer.Int32Ptr(0),
-			MaxScale: utilpointer.Int32Ptr(1),
+			MinScale: ptr.Int32(0),
+			MaxScale: ptr.Int32(1),
 		},
-		PollingInterval: utilpointer.Int32Ptr(30),
-		CooldownPeriod:  utilpointer.Int32Ptr(300),
+		PollingInterval: ptr.Int32(30),
+		CooldownPeriod:  ptr.Int32(300),
 		Type:            "mytype",
 		Metadata:        map[string]string{"myoption": "myoptionvalue"},
 	}
