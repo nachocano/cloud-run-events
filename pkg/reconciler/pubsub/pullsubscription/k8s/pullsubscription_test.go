@@ -761,7 +761,7 @@ func TestAllCases(t *testing.T) {
 		pubsubBase := &pubsub.PubSubBase{
 			Base: reconciler.NewBase(ctx, controllerAgentName, cmw),
 		}
-		return &Reconciler{
+		r := &Reconciler{
 			Base: &psreconciler.Base{
 				PubSubBase:             pubsubBase,
 				DeploymentLister:       listers.GetDeploymentLister(),
@@ -773,6 +773,8 @@ func TestAllCases(t *testing.T) {
 				FinalizerName:          finalizerName,
 			},
 		}
+		r.ReconcileFn = r.ReconcileDeployment
+		return r
 	}))
 }
 
