@@ -19,7 +19,6 @@ package keda
 import (
 	"context"
 
-	"github.com/google/knative-gcp/pkg/apis/pubsub/v1alpha1"
 	gpubsub "github.com/google/knative-gcp/pkg/gclient/pubsub"
 	"github.com/google/knative-gcp/pkg/reconciler"
 	"github.com/google/knative-gcp/pkg/reconciler/pubsub"
@@ -102,7 +101,7 @@ func NewController(
 	pullSubscriptionInformer.Informer().AddEventHandlerWithResyncPeriod(pullSubscriptionHandler, reconciler.DefaultResyncPeriod)
 
 	deploymentInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: controller.Filter(v1alpha1.SchemeGroupVersion.WithKind("PullSubscription")),
+		FilterFunc: onlyKedaScaler,
 		Handler:    controller.HandleAll(impl.EnqueueControllerOf),
 	})
 

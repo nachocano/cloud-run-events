@@ -19,7 +19,6 @@ package k8s
 import (
 	"context"
 
-	"github.com/google/knative-gcp/pkg/apis/pubsub/v1alpha1"
 	pullsubscriptioninformers "github.com/google/knative-gcp/pkg/client/injection/informers/pubsub/v1alpha1/pullsubscription"
 	gpubsub "github.com/google/knative-gcp/pkg/gclient/pubsub"
 	"github.com/google/knative-gcp/pkg/reconciler"
@@ -28,11 +27,13 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap"
 	"k8s.io/client-go/tools/cache"
+	duckv1alpha1 "knative.dev/pkg/apis/duck/v1alpha1"
 	deploymentinformer "knative.dev/pkg/client/injection/kube/informers/apps/v1/deployment"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/metrics"
+	pkgreconciler "knative.dev/pkg/reconciler"
 	"knative.dev/pkg/resolver"
 	tracingconfig "knative.dev/pkg/tracing/config"
 )
@@ -89,10 +90,18 @@ func NewController(
 	impl := controller.NewImpl(r, pubsubBase.Logger, reconcilerName)
 
 	pubsubBase.Logger.Info("Setting up event handlers")
-	pullSubscriptionInformer.Informer().AddEventHandlerWithResyncPeriod(controller.HandleAll(impl.Enqueue), reconciler.DefaultResyncPeriod)
+
+	onlyKedaScaler := pkgreconciler.AnnotationFilterFunc(duckv1alpha1.SourceScalerAnnotationKey, duckv1alpha1.KEDA, false)
+	notKedaScaler := pkgreconciler.Not(onlyKedaScaler)
+
+	pullSubscriptionHandler := cache.FilteringResourceEventHandler{
+		FilterFunc: notKedaScaler,
+		Handler:    controller.HandleAll(impl.Enqueue),
+	}
+	pullSubscriptionInformer.Informer().AddEventHandlerWithResyncPeriod(pullSubscriptionHandler, reconciler.DefaultResyncPeriod)
 
 	deploymentInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: controller.Filter(v1alpha1.SchemeGroupVersion.WithKind("PullSubscription")),
+		FilterFunc: notKedaScaler,
 		Handler:    controller.HandleAll(impl.EnqueueControllerOf),
 	})
 
