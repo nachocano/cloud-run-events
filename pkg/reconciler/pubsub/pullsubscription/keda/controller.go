@@ -106,7 +106,7 @@ func NewController(
 	})
 
 	r.UriResolver = resolver.NewURIResolver(ctx, impl.EnqueueKey)
-	r.ReconcileFn = r.ReconcileScaledObject
+	r.ReconcileDataPlaneFn = r.ReconcileScaledObject
 
 	cmw.Watch(logging.ConfigMapName(), r.UpdateFromLoggingConfigMap)
 	cmw.Watch(metrics.ConfigMapName(), r.UpdateFromMetricsConfigMap)

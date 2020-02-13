@@ -773,7 +773,7 @@ func TestAllCases(t *testing.T) {
 				FinalizerName:          finalizerName,
 			},
 		}
-		r.ReconcileFn = r.ReconcileDeployment
+		r.ReconcileDataPlaneFn = r.ReconcileDeployment
 		return r
 	}))
 }

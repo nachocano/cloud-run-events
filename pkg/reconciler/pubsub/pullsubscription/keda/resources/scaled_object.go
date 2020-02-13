@@ -43,19 +43,22 @@ func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullS
 			"apiVersion": "keda.k8s.io/v1alpha1",
 			"kind":       "ScaledObject",
 			"metadata": map[string]interface{}{
-				"namespace": ps.Namespace,
-				// TODO autogenerate the name using the UID
-				"name": ps.Name,
+				"namespace": ra.Namespace,
+				"name":      GenerateScaledObjectName(ra),
 				"labels": map[string]interface{}{
-					"deploymentName": ra.Name,
+					"deploymentName":                  ra.Name,
+					"events.cloud.google.com/ps-name": ps.Name,
 				},
+				// Make the Deployment the owner. The PS in turn is the owner of the Deployment.
+				// The deletions will cascade. The good thing of making the Deployment the owner
+				// is that we will recreate a new ScaledObject if someone deletes the Deployment.
 				"ownerReferences": []map[string]interface{}{{
-					"apiVersion":         ps.GetGroupVersion().String(),
-					"kind":               ps.GetGroupVersionKind().Kind,
+					"apiVersion":         "apps/v1",
+					"kind":               "Deployment",
 					"blockOwnerDeletion": true,
 					"controller":         true,
-					"name":               ps.Name,
-					"uid":                ps.UID,
+					"name":               ra.Name,
+					"uid":                ra.UID,
 				}},
 			},
 			"spec": map[string]interface{}{

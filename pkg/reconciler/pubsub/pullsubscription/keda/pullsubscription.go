@@ -19,6 +19,7 @@ package keda
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/equality"
 
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
@@ -47,30 +48,34 @@ func (r *Reconciler) Reconcile(ctx context.Context, key string) error {
 
 func (r *Reconciler) ReconcileScaledObject(ctx context.Context, ra *appsv1.Deployment, src *v1alpha1.PullSubscription) error {
 	// TODO discovery
-	// TODO reconcileDeployment but do not consider replicas.
-	// TODO reconcileScaledObject... if we created a new deployment
 	// TODO upstream to pkg
 	// TODO tracker
-
+	existing, err := r.Base.GetOrCreateReceiveAdapter(ctx, ra, src)
+	if err != nil {
+		return err
+	}
+	// Given than the Deployment replicas will be controlled by Keda, we assume
+	// the replica count from the existing one is the correct one.
+	ra.Spec.Replicas = existing.Spec.Replicas
+	if !equality.Semantic.DeepDerivative(ra.Spec, existing.Spec) {
+		existing.Spec = ra.Spec
+		_, err := r.KubeClientSet.AppsV1().Deployments(src.Namespace).Update(existing)
+		if err != nil {
+			logging.FromContext(ctx).Desugar().Error("Error updating Receive Adapter", zap.Error(err))
+			return err
+		}
+	}
+	// Now we reconcile the ScaledObject.
 	gvr, _ := meta.UnsafeGuessKindToResource(resources.ScaledObjectGVK)
 	scaledObjectResourceInterface := r.DynamicClientSet.Resource(gvr).Namespace(src.Namespace)
 	if scaledObjectResourceInterface == nil {
 		return fmt.Errorf("unable to create dynamic client for ScaledObject")
 	}
 
-	so := resources.MakeScaledObject(ctx, ra, src)
-	_, err := scaledObjectResourceInterface.Get(so.GetName(), metav1.GetOptions{})
+	so := resources.MakeScaledObject(ctx, existing, src)
+	_, err = scaledObjectResourceInterface.Get(so.GetName(), metav1.GetOptions{})
 	if err != nil {
 		if apierrs.IsNotFound(err) {
-			// If there is no scaledObject, we need to create the deployment as well,
-			// so that the ScaledObject can set it as its scaleTargetRef.
-			_, err := r.Base.GetOrCreateReceiveAdapter(ctx, ra, src)
-			if err != nil {
-				logging.FromContext(ctx).Desugar().Error("Failed to get or create Receive Adapter in order to create the ScaledObject", zap.Error(err))
-				return err
-			}
-			// Note that the ScaledObject is the one in charge of reconciling the Deployment, e.g., by changing the number
-			// of replicas.
 			_, err = scaledObjectResourceInterface.Create(so, metav1.CreateOptions{})
 			if err != nil {
 				logging.FromContext(ctx).Desugar().Error("Failed to create ScaledObject", zap.Any("so", so), zap.Error(err))
@@ -78,6 +83,7 @@ func (r *Reconciler) ReconcileScaledObject(ctx context.Context, ra *appsv1.Deplo
 			}
 		} else {
 			logging.FromContext(ctx).Desugar().Error("Failed to get ScaledObject", zap.Any("so", so), zap.Error(err))
+			return err
 		}
 	}
 	return nil

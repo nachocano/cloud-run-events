@@ -80,11 +80,12 @@ type Base struct {
 	// This is needed so that we can inject a mock client for UTs purposes.
 	CreateClientFn gpubsub.CreateFn
 
-	// ReconcileFn is the function used to reconcile the data plane resources.
-	ReconcileFn ReconcileFunc
+	// ReconcileDataPlaneFn is the function used to reconcile the data plane resources.
+	ReconcileDataPlaneFn ReconcileDataPlaneFunc
 }
 
-type ReconcileFunc func(ctx context.Context, d *appsv1.Deployment, ps *v1alpha1.PullSubscription) error
+// ReconcileDataPlaneFunc is used to reconcile the data plane component(s).
+type ReconcileDataPlaneFunc func(ctx context.Context, d *appsv1.Deployment, ps *v1alpha1.PullSubscription) error
 
 // Reconcile compares the actual state with the desired, and attempts to
 // converge the two. It then updates the Status block of the PullSubscription resource
@@ -203,7 +204,7 @@ func (r *Base) reconcile(ctx context.Context, ps *v1alpha1.PullSubscription) err
 	}
 	ps.Status.MarkSubscribed(subscriptionID)
 
-	err = r.reconcileDataPlaneResources(ctx, ps, r.ReconcileFn)
+	err = r.reconcileDataPlaneResources(ctx, ps, r.ReconcileDataPlaneFn)
 	if err != nil {
 		ps.Status.MarkNotDeployed("DataPlaneReconcileFailed", "Failed to reconcile Data Plane resource(s): %s", err.Error())
 	}
@@ -419,7 +420,7 @@ func (r *Base) removeFinalizer(s *v1alpha1.PullSubscription) {
 	s.Finalizers = finalizers.List()
 }
 
-func (r *Base) reconcileDataPlaneResources(ctx context.Context, src *v1alpha1.PullSubscription, f ReconcileFunc) error {
+func (r *Base) reconcileDataPlaneResources(ctx context.Context, src *v1alpha1.PullSubscription, f ReconcileDataPlaneFunc) error {
 	loggingConfig, err := logging.LoggingConfigToJson(r.LoggingConfig)
 	if err != nil {
 		logging.FromContext(ctx).Desugar().Error("Error serializing existing logging config", zap.Error(err))
