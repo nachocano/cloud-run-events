@@ -35,6 +35,7 @@ import (
 	"knative.dev/pkg/metrics"
 	"knative.dev/pkg/resolver"
 	tracingconfig "knative.dev/pkg/tracing/config"
+	"knative.dev/pkg/tracker"
 
 	pullsubscriptioninformers "github.com/google/knative-gcp/pkg/client/injection/informers/pubsub/v1alpha1/pullsubscription"
 	deploymentinformer "knative.dev/pkg/client/injection/kube/informers/apps/v1/deployment"
@@ -107,13 +108,12 @@ func NewController(
 
 	r.UriResolver = resolver.NewURIResolver(ctx, impl.EnqueueKey)
 	r.ReconcileDataPlaneFn = r.ReconcileScaledObject
+	// Tracker is used to notify us that a Keda ScaledObject has changed so that we can reconcile.
+	r.tracker = tracker.New(impl.EnqueueKey, controller.GetTrackerLease(ctx))
 
 	cmw.Watch(logging.ConfigMapName(), r.UpdateFromLoggingConfigMap)
 	cmw.Watch(metrics.ConfigMapName(), r.UpdateFromMetricsConfigMap)
 	cmw.Watch(tracingconfig.ConfigName, r.UpdateFromTracingConfigMap)
-
-	// TODO discovery, if keda not install fail.
-	// TODO watch ScaledObjects.
 
 	return impl
 }
