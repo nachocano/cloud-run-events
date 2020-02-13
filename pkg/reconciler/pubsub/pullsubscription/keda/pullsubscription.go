@@ -95,8 +95,10 @@ func (r *Reconciler) ReconcileScaledObject(ctx context.Context, ra *appsv1.Deplo
 		Namespace:  existing.Namespace,
 		Name:       resources.GenerateScaledObjectName(existing),
 	}
-	// Tell tracker to reconcile this PullSubscription whenever the ScaledObject changes.
-	if err = r.tracker.TrackReference(ref, src); err != nil {
+	track := r.scaledObjectTracker.TrackInNamespace(src)
+
+	// Track changes in the ScaledObject.
+	if err = track(ref.ObjectReference()); err != nil {
 		logging.FromContext(ctx).Desugar().Error("Unable to track changes to ScaledObject", zap.Error(err))
 		return err
 	}

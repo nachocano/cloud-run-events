@@ -28,18 +28,16 @@ import (
 	pkgreconciler "knative.dev/pkg/reconciler"
 
 	"github.com/google/knative-gcp/pkg/client/injection/ducks/duck/v1alpha1/resource"
+	pullsubscriptioninformers "github.com/google/knative-gcp/pkg/client/injection/informers/pubsub/v1alpha1/pullsubscription"
 	psreconciler "github.com/google/knative-gcp/pkg/reconciler/pubsub/pullsubscription"
 	eventingduck "knative.dev/eventing/pkg/duck"
+	deploymentinformer "knative.dev/pkg/client/injection/kube/informers/apps/v1/deployment"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/metrics"
 	"knative.dev/pkg/resolver"
 	tracingconfig "knative.dev/pkg/tracing/config"
-	"knative.dev/pkg/tracker"
-
-	pullsubscriptioninformers "github.com/google/knative-gcp/pkg/client/injection/informers/pubsub/v1alpha1/pullsubscription"
-	deploymentinformer "knative.dev/pkg/client/injection/kube/informers/apps/v1/deployment"
 )
 
 const (
@@ -110,7 +108,6 @@ func NewController(
 	r.UriResolver = resolver.NewURIResolver(ctx, impl.EnqueueKey)
 	r.ReconcileDataPlaneFn = r.ReconcileScaledObject
 	r.scaledObjectTracker = eventingduck.NewListableTracker(ctx, resource.Get, impl.EnqueueKey, controller.GetTrackerLease(ctx))
-	tracker.New(impl.EnqueueKey, controller.GetTrackerLease(ctx))
 
 	cmw.Watch(logging.ConfigMapName(), r.UpdateFromLoggingConfigMap)
 	cmw.Watch(metrics.ConfigMapName(), r.UpdateFromMetricsConfigMap)
