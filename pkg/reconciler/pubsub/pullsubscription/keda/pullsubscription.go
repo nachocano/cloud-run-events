@@ -32,6 +32,8 @@ import (
 	"github.com/google/knative-gcp/pkg/reconciler/pubsub/pullsubscription/keda/resources"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	eventingduck "knative.dev/eventing/pkg/duck"
+
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/tracker"
@@ -41,7 +43,8 @@ import (
 type Reconciler struct {
 	*psreconciler.Base
 
-	tracker tracker.Interface
+	// scaledObjectTracker is used to notify us that a Keda ScaledObject has changed so that we can reconcile.
+	scaledObjectTracker eventingduck.ListableTracker
 }
 
 // Check that our Reconciler implements controller.Reconciler

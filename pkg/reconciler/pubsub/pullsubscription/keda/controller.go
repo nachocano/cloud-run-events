@@ -18,7 +18,6 @@ package keda
 
 import (
 	"context"
-
 	gpubsub "github.com/google/knative-gcp/pkg/gclient/pubsub"
 	"github.com/google/knative-gcp/pkg/reconciler"
 	"github.com/google/knative-gcp/pkg/reconciler/pubsub"
@@ -28,7 +27,9 @@ import (
 	duckv1alpha1 "knative.dev/pkg/apis/duck/v1alpha1"
 	pkgreconciler "knative.dev/pkg/reconciler"
 
+	"github.com/google/knative-gcp/pkg/client/injection/ducks/duck/v1alpha1/resource"
 	psreconciler "github.com/google/knative-gcp/pkg/reconciler/pubsub/pullsubscription"
+	eventingduck "knative.dev/eventing/pkg/duck"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
@@ -108,9 +109,8 @@ func NewController(
 
 	r.UriResolver = resolver.NewURIResolver(ctx, impl.EnqueueKey)
 	r.ReconcileDataPlaneFn = r.ReconcileScaledObject
-	// Tracker is used to notify us that a Keda ScaledObject has changed so that we can reconcile.
-	// TODO not working. Need to call the OnChanged callback
-	r.tracker = tracker.New(impl.EnqueueKey, controller.GetTrackerLease(ctx))
+	r.scaledObjectTracker = eventingduck.NewListableTracker(ctx, resource.Get, impl.EnqueueKey, controller.GetTrackerLease(ctx))
+	tracker.New(impl.EnqueueKey, controller.GetTrackerLease(ctx))
 
 	cmw.Watch(logging.ConfigMapName(), r.UpdateFromLoggingConfigMap)
 	cmw.Watch(metrics.ConfigMapName(), r.UpdateFromMetricsConfigMap)
