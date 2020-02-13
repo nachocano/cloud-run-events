@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Google LLC
+Copyright 2020 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,12 +14,32 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package pullsubscription
+package keda
 
 import (
 	"context"
+	gpubsub "github.com/google/knative-gcp/pkg/gclient/pubsub"
+	"github.com/google/knative-gcp/pkg/reconciler"
+	"github.com/google/knative-gcp/pkg/reconciler/pubsub"
+	"github.com/kelseyhightower/envconfig"
+	"go.uber.org/zap"
+	"k8s.io/client-go/tools/cache"
+	duckv1alpha1 "knative.dev/pkg/apis/duck/v1alpha1"
+	pkgreconciler "knative.dev/pkg/reconciler"
+
+	"github.com/google/knative-gcp/pkg/client/injection/ducks/duck/v1alpha1/resource"
+	psreconciler "github.com/google/knative-gcp/pkg/reconciler/pubsub/pullsubscription"
+	eventingduck "knative.dev/eventing/pkg/duck"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
+	"knative.dev/pkg/logging"
+	"knative.dev/pkg/metrics"
+	"knative.dev/pkg/resolver"
+	tracingconfig "knative.dev/pkg/tracing/config"
+	"knative.dev/pkg/tracker"
+
+	pullsubscriptioninformers "github.com/google/knative-gcp/pkg/client/injection/informers/pubsub/v1alpha1/pullsubscription"
+	deploymentinformer "knative.dev/pkg/client/injection/kube/informers/apps/v1/deployment"
 )
 
 const (
@@ -29,6 +49,8 @@ const (
 	// controllerAgentName is the string used by this controller to identify
 	// itself when creating events.
 	controllerAgentName = "cloud-run-events-pubsub-keda-pullsubscription-controller"
+
+	finalizerName = controllerAgentName
 )
 
 type envConfig struct {
@@ -42,50 +64,57 @@ func NewController(
 	ctx context.Context,
 	cmw configmap.Watcher,
 ) *controller.Impl {
-	return nil
-	//deploymentInformer := deploymentinformer.Get(ctx)
-	//pullSubscriptionInformer := pullsubscriptioninformers.Get(ctx)
-	//
-	//logger := logging.FromContext(ctx).Named(controllerAgentName).Desugar()
-	//
-	//var env envConfig
-	//if err := envconfig.Process("", &env); err != nil {
-	//	logger.Fatal("Failed to process env var", zap.Error(err))
-	//}
-	//
-	//pubsubBase := &pubsub.PubSubBase{
-	//	Base: reconciler.NewBase(ctx, controllerAgentName, cmw),
-	//}
-	//
-	//r := &Reconciler{
-	//	PubSubBase:             pubsubBase,
-	//	deploymentLister:       deploymentInformer.Lister(),
-	//	pullSubscriptionLister: pullSubscriptionInformer.Lister(),
-	//	receiveAdapterImage:    env.ReceiveAdapter,
-	//	createClientFn:         gpubsub.NewClient,
-	//}
-	//
-	//impl := controller.NewImpl(r, pubsubBase.Logger, reconcilerName)
-	//
-	//onlyHpaClass := reconciler.AnnotationFilterFunc(duckv1alpha1.ClassAnnotationKey, autoscaling.HPA, false)
-	//
-	//pubsubBase.Logger.Info("Setting up event handlers")
-	//pullSubscriptionInformer.Informer().AddEventHandlerWithResyncPeriod(controller.HandleAll(impl.Enqueue), reconciler.DefaultResyncPeriod)
-	//
-	//deploymentInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-	//	FilterFunc: controller.Filter(v1alpha1.SchemeGroupVersion.WithKind("PullSubscription")),
-	//	Handler:    controller.HandleAll(impl.EnqueueControllerOf),
-	//})
-	//
-	//r.uriResolver = resolver.NewURIResolver(ctx, impl.EnqueueKey)
-	//
-	//cmw.Watch(logging.ConfigMapName(), r.UpdateFromLoggingConfigMap)
-	//cmw.Watch(metrics.ConfigMapName(), r.UpdateFromMetricsConfigMap)
-	//cmw.Watch(tracingconfig.ConfigName, r.UpdateFromTracingConfigMap)
-	//
-	//// TODO discovery, if keda not install fail.
-	//// TODO watch ScaledObjects.
-	//// TODO upstream common stuff to pkg.
-	//
-	//return impl
+
+	deploymentInformer := deploymentinformer.Get(ctx)
+	pullSubscriptionInformer := pullsubscriptioninformers.Get(ctx)
+
+	logger := logging.FromContext(ctx).Named(controllerAgentName).Desugar()
+
+	var env envConfig
+	if err := envconfig.Process("", &env); err != nil {
+		logger.Fatal("Failed to process env var", zap.Error(err))
+	}
+
+	pubsubBase := &pubsub.PubSubBase{
+		Base: reconciler.NewBase(ctx, controllerAgentName, cmw),
+	}
+
+	r := &Reconciler{
+		Base: &psreconciler.Base{
+			PubSubBase:             pubsubBase,
+			DeploymentLister:       deploymentInformer.Lister(),
+			PullSubscriptionLister: pullSubscriptionInformer.Lister(),
+			ReceiveAdapterImage:    env.ReceiveAdapter,
+			CreateClientFn:         gpubsub.NewClient,
+			ControllerAgentName:    controllerAgentName,
+			FinalizerName:          finalizerName,
+		},
+	}
+
+	impl := controller.NewImpl(r, pubsubBase.Logger, reconcilerName)
+
+	pubsubBase.Logger.Info("Setting up event handlers")
+	onlyKedaScaler := pkgreconciler.AnnotationFilterFunc(duckv1alpha1.SourceScalerAnnotationKey, duckv1alpha1.KEDA, false)
+
+	pullSubscriptionHandler := cache.FilteringResourceEventHandler{
+		FilterFunc: onlyKedaScaler,
+		Handler:    controller.HandleAll(impl.Enqueue),
+	}
+	pullSubscriptionInformer.Informer().AddEventHandlerWithResyncPeriod(pullSubscriptionHandler, reconciler.DefaultResyncPeriod)
+
+	deploymentInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
+		FilterFunc: onlyKedaScaler,
+		Handler:    controller.HandleAll(impl.EnqueueControllerOf),
+	})
+
+	r.UriResolver = resolver.NewURIResolver(ctx, impl.EnqueueKey)
+	r.ReconcileDataPlaneFn = r.ReconcileScaledObject
+	r.scaledObjectTracker = eventingduck.NewListableTracker(ctx, resource.Get, impl.EnqueueKey, controller.GetTrackerLease(ctx))
+	tracker.New(impl.EnqueueKey, controller.GetTrackerLease(ctx))
+
+	cmw.Watch(logging.ConfigMapName(), r.UpdateFromLoggingConfigMap)
+	cmw.Watch(metrics.ConfigMapName(), r.UpdateFromMetricsConfigMap)
+	cmw.Watch(tracingconfig.ConfigName, r.UpdateFromTracingConfigMap)
+
+	return impl
 }
