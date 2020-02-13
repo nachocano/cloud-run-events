@@ -19,11 +19,13 @@ package keda
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/discovery"
 
 	"github.com/google/knative-gcp/pkg/apis/pubsub/v1alpha1"
 	psreconciler "github.com/google/knative-gcp/pkg/reconciler/pubsub/pullsubscription"
@@ -50,9 +52,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, key string) error {
 }
 
 func (r *Reconciler) ReconcileScaledObject(ctx context.Context, ra *appsv1.Deployment, src *v1alpha1.PullSubscription) error {
-	// TODO discovery
-	// TODO upstream to pkg
-	// TODO tracker
+	// Check whether KEDA is installed, if not, error out.
+	// Ideally this should be done in the webhook, thus not even allowing the creation of the object.
+	if err := discovery.ServerSupportsVersion(r.KubeClientSet.Discovery(), resources.KedaSchemeGroupVersion); err != nil {
+		if strings.Contains(err.Error(), "server does not support API version") {
+			logging.FromContext(ctx).Desugar().Error("KEDA not installed, failed to check API version", zap.Any("GroupVersion", resources.KedaSchemeGroupVersion))
+			return err
+		}
+	}
+
 	existing, err := r.Base.GetOrCreateReceiveAdapter(ctx, ra, src)
 	if err != nil {
 		return err

@@ -31,6 +31,8 @@ var (
 		Version: "v1alpha1",
 		Kind:    "ScaledObject",
 	}
+
+	KedaSchemeGroupVersion = schema.GroupVersion{Group: "keda.k8s.io", Version: "v1alpha1"}
 )
 
 func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullSubscription) *unstructured.Unstructured {

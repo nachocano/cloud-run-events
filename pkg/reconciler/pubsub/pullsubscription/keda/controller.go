@@ -109,6 +109,7 @@ func NewController(
 	r.UriResolver = resolver.NewURIResolver(ctx, impl.EnqueueKey)
 	r.ReconcileDataPlaneFn = r.ReconcileScaledObject
 	// Tracker is used to notify us that a Keda ScaledObject has changed so that we can reconcile.
+	// TODO not working. Need to call the OnChanged callback
 	r.tracker = tracker.New(impl.EnqueueKey, controller.GetTrackerLease(ctx))
 
 	cmw.Watch(logging.ConfigMapName(), r.UpdateFromLoggingConfigMap)
