@@ -207,6 +207,7 @@ func (r *Base) reconcile(ctx context.Context, ps *v1alpha1.PullSubscription) err
 	err = r.reconcileDataPlaneResources(ctx, ps, r.ReconcileDataPlaneFn)
 	if err != nil {
 		ps.Status.MarkNotDeployed("DataPlaneReconcileFailed", "Failed to reconcile Data Plane resource(s): %s", err.Error())
+		return err
 	}
 	ps.Status.MarkDeployed()
 
