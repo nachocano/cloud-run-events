@@ -24,7 +24,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"knative.dev/pkg/apis"
-	pkgduckv1alpha1 "knative.dev/pkg/apis/duck/v1alpha1"
 	"knative.dev/pkg/ptr"
 )
 
@@ -32,9 +31,23 @@ const (
 	defaultRetentionDuration = 7 * 24 * time.Hour
 	defaultAckDeadline       = 30 * time.Second
 
-	defaultScalerType       = "gcp-pubsub"
-	defaultSubscriptionSize = "5"
-	subscriptionSize        = "subscriptionSize"
+	SourceAutoScalerAnnotationKey = "sources.knative.dev/autoscaler"
+	SourceMinScaleAnnotationKey   = "sources.knative.dev/minScale"
+	SourceMaxScaleAnnotationKey   = "sources.knative.dev/maxScale"
+
+	KedaAutoScaler                    = "keda"
+	KedaScalerAnnotationKey           = "keda.knative.dev/scaler"
+	KedaPollingIntervalAnnotationKey  = "keda.knative.dev/pollingInterval"
+	KedaCooldownPeriodAnnotationKey   = "keda.knative.dev/cooldownPeriod"
+	KedaSubscriptionSizeAnnotationKey = "keda.knative.dev/subscriptionSize"
+
+	defaultMinScale = "0"
+	defaultMaxScale = "1"
+
+	defaultKedaScaler           = "gcp-pubsub"
+	defaultKedaSubscriptionSize = "5"
+	defaultKedaPollingInterval  = "30"
+	defaultKedaCooldownPeriod   = "120"
 )
 
 func (s *PullSubscription) SetDefaults(ctx context.Context) {
@@ -65,25 +78,30 @@ func (ss *PullSubscriptionSpec) SetDefaults(ctx context.Context) {
 		ss.Mode = ModeCloudEventsBinary
 	}
 
-	if ss.Scaler != nil && !equality.Semantic.DeepEqual(ss.Scaler, &pkgduckv1alpha1.KedaScalerSpec{}) {
-		// Set up common defaults for Scalers.
-		ss.Scaler.SetDefault(ctx)
+	// TODO move to some method
+	parentMeta := apis.ParentMeta(ctx)
+	if _, ok := parentMeta.Annotations[SourceAutoScalerAnnotationKey]; !ok {
+		parentMeta.Annotations[SourceAutoScalerAnnotationKey] = KedaAutoScaler
+	}
 
-		// Set up our own defaults for Keda.
-		if ss.Scaler.Type == "" {
-			ss.Scaler.Type = defaultScalerType
+	if parentMeta.Annotations[SourceAutoScalerAnnotationKey] == KedaAutoScaler {
+		if _, ok := parentMeta.Annotations[SourceMinScaleAnnotationKey]; !ok {
+			parentMeta.Annotations[SourceMinScaleAnnotationKey] = defaultMinScale
 		}
-
-		if ss.Scaler.Metadata == nil {
-			ss.Scaler.Metadata = make(map[string]string)
+		if _, ok := parentMeta.Annotations[SourceMaxScaleAnnotationKey]; !ok {
+			parentMeta.Annotations[SourceMaxScaleAnnotationKey] = defaultMaxScale
 		}
-		if _, ok := ss.Scaler.Metadata[subscriptionSize]; !ok {
-			ss.Scaler.Metadata[subscriptionSize] = defaultSubscriptionSize
+		if _, ok := parentMeta.Annotations[KedaPollingIntervalAnnotationKey]; !ok {
+			parentMeta.Annotations[KedaPollingIntervalAnnotationKey] = defaultKedaPollingInterval
 		}
-
-		parentMeta := apis.ParentMeta(ctx)
-		if _, ok := parentMeta.Annotations[pkgduckv1alpha1.SourceScalerAnnotationKey]; !ok {
-			parentMeta.Annotations[pkgduckv1alpha1.SourceScalerAnnotationKey] = pkgduckv1alpha1.KEDA
+		if _, ok := parentMeta.Annotations[KedaCooldownPeriodAnnotationKey]; !ok {
+			parentMeta.Annotations[KedaCooldownPeriodAnnotationKey] = defaultKedaCooldownPeriod
+		}
+		if _, ok := parentMeta.Annotations[KedaSubscriptionSizeAnnotationKey]; !ok {
+			parentMeta.Annotations[KedaSubscriptionSizeAnnotationKey] = defaultKedaSubscriptionSize
+		}
+		if _, ok := parentMeta.Annotations[KedaScalerAnnotationKey]; !ok {
+			parentMeta.Annotations[KedaScalerAnnotationKey] = defaultKedaScaler
 		}
 	}
 }
