@@ -32,6 +32,7 @@ var _ duck.Implementable = (*Resource)(nil)
 
 // GroupResource is a skeleton type wrapping all Kubernetes resources. It is typically used to watch
 // arbitrary other resources. This is not a real resource.
+// TODO upstream to pkg
 type Resource struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

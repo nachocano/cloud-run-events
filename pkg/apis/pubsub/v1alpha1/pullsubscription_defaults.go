@@ -66,10 +66,10 @@ func (ss *PullSubscriptionSpec) SetDefaults(ctx context.Context) {
 	}
 
 	if ss.Scaler != nil && !equality.Semantic.DeepEqual(ss.Scaler, &pkgduckv1alpha1.KedaScalerSpec{}) {
-		// Set up common defaults for Keda scalers.
+		// Set up common defaults for Scalers.
 		ss.Scaler.SetDefault(ctx)
 
-		// Set up our own defaults.
+		// Set up our own defaults for Keda.
 		if ss.Scaler.Type == "" {
 			ss.Scaler.Type = defaultScalerType
 		}

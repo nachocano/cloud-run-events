@@ -30,6 +30,7 @@ required = [
   name = "knative.dev/pkg"
   source = "github.com/nachocano/pkg"
   branch = "scaling_v2"
+  # DO NOT SUBMIT
 
 # This is a preemptive override.
 [[override]]

@@ -54,6 +54,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key string) error {
 	return r.Base.Reconcile(ctx, key)
 }
 
+// TODO upstream to pkg
 func (r *Reconciler) ReconcileScaledObject(ctx context.Context, ra *appsv1.Deployment, src *v1alpha1.PullSubscription) error {
 	// Check whether KEDA is installed, if not, error out.
 	// Ideally this should be done in the webhook, thus not even allowing the creation of the object.

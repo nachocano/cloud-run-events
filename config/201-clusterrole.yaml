@@ -128,7 +128,6 @@ rules:
     - eventtypes
   verbs: *everything
 
-# TODO should make it an aggregated role
 - apiGroups:
     - keda.k8s.io
   resources:
