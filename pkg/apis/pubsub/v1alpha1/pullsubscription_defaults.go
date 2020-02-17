@@ -23,36 +23,17 @@ import (
 	duckv1alpha1 "github.com/google/knative-gcp/pkg/apis/duck/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"knative.dev/pkg/apis"
 	"knative.dev/pkg/ptr"
 )
 
 const (
 	defaultRetentionDuration = 7 * 24 * time.Hour
 	defaultAckDeadline       = 30 * time.Second
-
-	SourceAutoScalerAnnotationKey = "sources.knative.dev/autoscaler"
-	SourceMinScaleAnnotationKey   = "sources.knative.dev/minScale"
-	SourceMaxScaleAnnotationKey   = "sources.knative.dev/maxScale"
-
-	KedaAutoScaler                    = "keda"
-	KedaScalerAnnotationKey           = "keda.knative.dev/scaler"
-	KedaPollingIntervalAnnotationKey  = "keda.knative.dev/pollingInterval"
-	KedaCooldownPeriodAnnotationKey   = "keda.knative.dev/cooldownPeriod"
-	KedaSubscriptionSizeAnnotationKey = "keda.knative.dev/subscriptionSize"
-
-	defaultMinScale = "0"
-	defaultMaxScale = "1"
-
-	defaultKedaScaler           = "gcp-pubsub"
-	defaultKedaSubscriptionSize = "5"
-	defaultKedaPollingInterval  = "30"
-	defaultKedaCooldownPeriod   = "120"
 )
 
 func (s *PullSubscription) SetDefaults(ctx context.Context) {
-	withParent := apis.WithinParent(ctx, s.ObjectMeta)
-	s.Spec.SetDefaults(withParent)
+	s.Spec.SetDefaults(ctx)
+	duckv1alpha1.SetAutoscalingAnnotationsDefaults(ctx, &s.ObjectMeta)
 }
 
 func (ss *PullSubscriptionSpec) SetDefaults(ctx context.Context) {
@@ -76,32 +57,5 @@ func (ss *PullSubscriptionSpec) SetDefaults(ctx context.Context) {
 	default:
 		// Default is CloudEvents Binary Mode.
 		ss.Mode = ModeCloudEventsBinary
-	}
-
-	// TODO move to some method
-	parentMeta := apis.ParentMeta(ctx)
-	if _, ok := parentMeta.Annotations[SourceAutoScalerAnnotationKey]; !ok {
-		parentMeta.Annotations[SourceAutoScalerAnnotationKey] = KedaAutoScaler
-	}
-
-	if parentMeta.Annotations[SourceAutoScalerAnnotationKey] == KedaAutoScaler {
-		if _, ok := parentMeta.Annotations[SourceMinScaleAnnotationKey]; !ok {
-			parentMeta.Annotations[SourceMinScaleAnnotationKey] = defaultMinScale
-		}
-		if _, ok := parentMeta.Annotations[SourceMaxScaleAnnotationKey]; !ok {
-			parentMeta.Annotations[SourceMaxScaleAnnotationKey] = defaultMaxScale
-		}
-		if _, ok := parentMeta.Annotations[KedaPollingIntervalAnnotationKey]; !ok {
-			parentMeta.Annotations[KedaPollingIntervalAnnotationKey] = defaultKedaPollingInterval
-		}
-		if _, ok := parentMeta.Annotations[KedaCooldownPeriodAnnotationKey]; !ok {
-			parentMeta.Annotations[KedaCooldownPeriodAnnotationKey] = defaultKedaCooldownPeriod
-		}
-		if _, ok := parentMeta.Annotations[KedaSubscriptionSizeAnnotationKey]; !ok {
-			parentMeta.Annotations[KedaSubscriptionSizeAnnotationKey] = defaultKedaSubscriptionSize
-		}
-		if _, ok := parentMeta.Annotations[KedaScalerAnnotationKey]; !ok {
-			parentMeta.Annotations[KedaScalerAnnotationKey] = defaultKedaScaler
-		}
 	}
 }

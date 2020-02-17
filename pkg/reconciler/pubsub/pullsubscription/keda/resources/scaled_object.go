@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
+	duckv1alpha1 "github.com/google/knative-gcp/pkg/apis/duck/v1alpha1"
 	"github.com/google/knative-gcp/pkg/apis/pubsub/v1alpha1"
 	"k8s.io/api/apps/v1"
 )
@@ -36,10 +37,6 @@ var (
 )
 
 func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullSubscription) *unstructured.Unstructured {
-	metadata := ps.Spec.Scaler.Metadata
-	metadata["subscriptionName"] = ps.Status.SubscriptionID
-	metadata["credentials"] = "GOOGLE_APPLICATION_CREDENTIALS_JSON"
-
 	so := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "keda.k8s.io/v1alpha1",
@@ -67,11 +64,17 @@ func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullS
 				"scaleTargetRef": map[string]interface{}{
 					"deploymentName": ra.Name,
 				},
-				"minReplicaCount": *ps.Spec.Scaler.MinScale,
-				"maxReplicaCount": *ps.Spec.Scaler.MaxScale,
+				"minReplicaCount": ps.Annotations[duckv1alpha1.AutoscalingMinScaleAnnotation],
+				"maxReplicaCount": ps.Annotations[duckv1alpha1.AutoscalingMaxScaleAnnotation],
+				"cooldownPeriod":  ps.Annotations[duckv1alpha1.KedaAutoscalingCooldownPeriodAnnotation],
+				"pollingInterval": ps.Annotations[duckv1alpha1.KedaAutoscalingPollingIntervalAnnotation],
 				"triggers": []map[string]interface{}{{
-					"type":     ps.Spec.Scaler.Type,
-					"metadata": metadata,
+					"type": "gcp-pubsub",
+					"metadata": map[string]interface{}{
+						"subscriptionSize": ps.Annotations[duckv1alpha1.KedaAutoscalingSubscriptionSizeAnnotation],
+						"subscriptionName": ps.Status.SubscriptionID,
+						"credentials":      "GOOGLE_APPLICATION_CREDENTIALS_JSON",
+					},
 				}},
 			},
 		},
