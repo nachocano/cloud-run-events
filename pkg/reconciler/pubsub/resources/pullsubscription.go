@@ -21,7 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
-	pkgduckv1alpha1 "knative.dev/pkg/apis/duck/v1alpha1"
 	"knative.dev/pkg/kmeta"
 
 	duckv1alpha1 "github.com/google/knative-gcp/pkg/apis/duck/v1alpha1"
@@ -48,7 +47,7 @@ func MakePullSubscription(args *PullSubscriptionArgs) *pubsubv1alpha1.PullSubscr
 	}
 
 	pubsubSecret := args.Spec.Secret
-	if args.Spec.PubSubSecret != nil && !equality.Semantic.DeepEqual(args.Spec.PubSubSecret, &corev1.SecretKeySelector{}){
+	if args.Spec.PubSubSecret != nil && !equality.Semantic.DeepEqual(args.Spec.PubSubSecret, &corev1.SecretKeySelector{}) {
 		pubsubSecret = args.Spec.PubSubSecret
 	}
 
@@ -66,11 +65,6 @@ func MakePullSubscription(args *PullSubscriptionArgs) *pubsubv1alpha1.PullSubscr
 			Topic:       args.Topic,
 			AdapterType: args.AdapterType,
 			Mode:        args.Mode,
-			KedaSourceSpec: pkgduckv1alpha1.KedaSourceSpec{
-				SourceSpec: duckv1.SourceSpec{
-					Sink: args.Spec.SourceSpec.Sink,
-				},
-			},
 		},
 	}
 	if args.Spec.CloudEventOverrides != nil && args.Spec.CloudEventOverrides.Extensions != nil {

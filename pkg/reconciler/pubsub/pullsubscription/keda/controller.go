@@ -18,13 +18,13 @@ package keda
 
 import (
 	"context"
+	duckv1alpha1 "github.com/google/knative-gcp/pkg/apis/duck/v1alpha1"
 	gpubsub "github.com/google/knative-gcp/pkg/gclient/pubsub"
 	"github.com/google/knative-gcp/pkg/reconciler"
 	"github.com/google/knative-gcp/pkg/reconciler/pubsub"
 	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap"
 	"k8s.io/client-go/tools/cache"
-	duckv1alpha1 "knative.dev/pkg/apis/duck/v1alpha1"
 	pkgreconciler "knative.dev/pkg/reconciler"
 
 	"github.com/google/knative-gcp/pkg/client/injection/ducks/duck/v1alpha1/resource"
@@ -92,7 +92,7 @@ func NewController(
 	impl := controller.NewImpl(r, pubsubBase.Logger, reconcilerName)
 
 	pubsubBase.Logger.Info("Setting up event handlers")
-	onlyKedaScaler := pkgreconciler.AnnotationFilterFunc(duckv1alpha1.SourceScalerAnnotationKey, duckv1alpha1.KEDA, false)
+	onlyKedaScaler := pkgreconciler.AnnotationFilterFunc(duckv1alpha1.AutoscalingClassAnnotation, duckv1alpha1.KEDA, false)
 
 	pullSubscriptionHandler := cache.FilteringResourceEventHandler{
 		FilterFunc: onlyKedaScaler,

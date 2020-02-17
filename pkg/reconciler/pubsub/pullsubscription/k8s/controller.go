@@ -20,6 +20,7 @@ package k8s
 import (
 	"context"
 
+	duckv1alpha1 "github.com/google/knative-gcp/pkg/apis/duck/v1alpha1"
 	pullsubscriptioninformers "github.com/google/knative-gcp/pkg/client/injection/informers/pubsub/v1alpha1/pullsubscription"
 	gpubsub "github.com/google/knative-gcp/pkg/gclient/pubsub"
 	"github.com/google/knative-gcp/pkg/reconciler"
@@ -28,7 +29,7 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap"
 	"k8s.io/client-go/tools/cache"
-	duckv1alpha1 "knative.dev/pkg/apis/duck/v1alpha1"
+
 	deploymentinformer "knative.dev/pkg/client/injection/kube/informers/apps/v1/deployment"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
@@ -92,7 +93,7 @@ func NewController(
 
 	pubsubBase.Logger.Info("Setting up event handlers")
 
-	onlyKedaScaler := pkgreconciler.AnnotationFilterFunc(duckv1alpha1.SourceScalerAnnotationKey, duckv1alpha1.KEDA, false)
+	onlyKedaScaler := pkgreconciler.AnnotationFilterFunc(duckv1alpha1.AutoscalingClassAnnotation, duckv1alpha1.KEDA, false)
 	notKedaScaler := pkgreconciler.Not(onlyKedaScaler)
 
 	pullSubscriptionHandler := cache.FilteringResourceEventHandler{
