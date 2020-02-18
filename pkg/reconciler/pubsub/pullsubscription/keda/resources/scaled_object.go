@@ -20,6 +20,7 @@ import (
 	"context"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"strconv"
 
 	duckv1alpha1 "github.com/google/knative-gcp/pkg/apis/duck/v1alpha1"
 	"github.com/google/knative-gcp/pkg/apis/pubsub/v1alpha1"
@@ -37,6 +38,12 @@ var (
 )
 
 func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullSubscription) *unstructured.Unstructured {
+	// These values should have already been validated in the webhook, and be valid ints. Not checking for errors.
+	minReplicaCount, _ := strconv.Atoi(ps.Annotations[duckv1alpha1.AutoscalingMinScaleAnnotation])
+	maxReplicateCount, _ := strconv.Atoi(ps.Annotations[duckv1alpha1.AutoscalingMaxScaleAnnotation])
+	cooldownPeriod, _ := strconv.Atoi(ps.Annotations[duckv1alpha1.KedaAutoscalingCooldownPeriodAnnotation])
+	pollingInterval, _ := strconv.Atoi(ps.Annotations[duckv1alpha1.KedaAutoscalingPollingIntervalAnnotation])
+
 	so := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "keda.k8s.io/v1alpha1",
@@ -64,10 +71,10 @@ func MakeScaledObject(ctx context.Context, ra *v1.Deployment, ps *v1alpha1.PullS
 				"scaleTargetRef": map[string]interface{}{
 					"deploymentName": ra.Name,
 				},
-				"minReplicaCount": ps.Annotations[duckv1alpha1.AutoscalingMinScaleAnnotation],
-				"maxReplicaCount": ps.Annotations[duckv1alpha1.AutoscalingMaxScaleAnnotation],
-				"cooldownPeriod":  ps.Annotations[duckv1alpha1.KedaAutoscalingCooldownPeriodAnnotation],
-				"pollingInterval": ps.Annotations[duckv1alpha1.KedaAutoscalingPollingIntervalAnnotation],
+				"minReplicaCount": minReplicaCount,
+				"maxReplicaCount": maxReplicateCount,
+				"cooldownPeriod":  cooldownPeriod,
+				"pollingInterval": pollingInterval,
 				"triggers": []map[string]interface{}{{
 					"type": "gcp-pubsub",
 					"metadata": map[string]interface{}{
