@@ -15,7 +15,6 @@ import (
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
-	kindreconciler "knative.dev/<repo>/pkg/client/injection/reconciler/<clientgroup>/<version>/<resource>"
 )
 
 func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
@@ -23,10 +22,10 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 
 	// TODO(you): Access informers
 
-	r := &Reconciler{
+	c := &Reconciler{
 		// TODO(you): Pass listers, clients, and other stuff.
 	}
-	impl := kindreconciler.NewImpl(ctx, r)
+	impl := controller.NewImpl(c, logger, "NameOfController")
 
 	// TODO(you): Set up event handlers.
 
