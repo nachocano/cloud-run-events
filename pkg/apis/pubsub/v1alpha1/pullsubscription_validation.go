@@ -39,8 +39,7 @@ const (
 
 func (current *PullSubscription) Validate(ctx context.Context) *apis.FieldError {
 	errs := current.Spec.Validate(ctx).ViaField("spec")
-	errs = duckv1alpha1.ValidateAutoscalingAnnotations(ctx, current.Annotations, errs)
-	return errs
+	return duckv1alpha1.ValidateAutoscalingAnnotations(ctx, current.Annotations, errs)
 }
 
 func (current *PullSubscriptionSpec) Validate(ctx context.Context) *apis.FieldError {
