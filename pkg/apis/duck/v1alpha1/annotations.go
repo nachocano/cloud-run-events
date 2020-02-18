@@ -104,15 +104,16 @@ func ValidateAutoscalingAnnotations(ctx context.Context, annotations map[string]
 	if autoscalingClass, ok := annotations[AutoscalingClassAnnotation]; ok {
 		// Only supported autoscaling class is KEDA.
 		if autoscalingClass != KEDA {
-			errs = errs.Also(apis.ErrInvalidValue(autoscalingClass, fmt.Sprintf("[%s]", AutoscalingClassAnnotation)))
+			errs = errs.Also(apis.ErrInvalidValue(autoscalingClass, fmt.Sprintf("metadata.annotations[%s]", AutoscalingClassAnnotation)))
 		}
 
-		minScale, errs := validateAnnotation(annotations, AutoscalingMinScaleAnnotation, minimumMinScale, errs)
-		maxScale, errs := validateAnnotation(annotations, AutoscalingMaxScaleAnnotation, minimumMaxScale, errs)
+		var minScale, maxScale int
+		minScale, errs = validateAnnotation(annotations, AutoscalingMinScaleAnnotation, minimumMinScale, errs)
+		maxScale, errs = validateAnnotation(annotations, AutoscalingMaxScaleAnnotation, minimumMaxScale, errs)
 		if maxScale < minScale {
 			errs = errs.Also(&apis.FieldError{
 				Message: fmt.Sprintf("maxScale=%d is less than minScale=%d", maxScale, minScale),
-				Paths:   []string{fmt.Sprintf("[%s]", AutoscalingMaxScaleAnnotation), fmt.Sprintf("[%s]", AutoscalingMinScaleAnnotation)},
+				Paths:   []string{fmt.Sprintf("metadata.annotations[%s]", AutoscalingMaxScaleAnnotation), fmt.Sprintf("[%s]", AutoscalingMinScaleAnnotation)},
 			})
 		}
 		_, errs = validateAnnotation(annotations, KedaAutoscalingPollingIntervalAnnotation, minimumKedaPollingInterval, errs)
@@ -131,11 +132,11 @@ func ValidateAutoscalingAnnotations(ctx context.Context, annotations map[string]
 func validateAnnotation(annotations map[string]string, annotation string, minimumValue int, errs *apis.FieldError) (int, *apis.FieldError) {
 	var value int
 	if val, ok := annotations[annotation]; !ok {
-		errs = errs.Also(apis.ErrMissingField(fmt.Sprintf("[%s]", annotation)))
+		errs = errs.Also(apis.ErrMissingField(fmt.Sprintf("metadata.annotations[%s]", annotation)))
 	} else if v, err := strconv.Atoi(val); err != nil {
-		errs = errs.Also(apis.ErrInvalidValue(val, fmt.Sprintf("[%s]", annotation)))
+		errs = errs.Also(apis.ErrInvalidValue(val, fmt.Sprintf("metadata.annotations[%s]", annotation)))
 	} else if v < minimumValue {
-		errs = errs.Also(apis.ErrOutOfBoundsValue(v, minimumValue, math.MaxInt32, fmt.Sprintf("[%s]", annotation)))
+		errs = errs.Also(apis.ErrOutOfBoundsValue(v, minimumValue, math.MaxInt32, fmt.Sprintf("metadata.annotations[%s]", annotation)))
 	} else {
 		value = v
 	}
@@ -156,7 +157,7 @@ func deleteAnnotationIfPresent(obj *metav1.ObjectMeta, annotation string) {
 
 func validateAnnotationNotExists(annotations map[string]string, annotation string, errs *apis.FieldError) *apis.FieldError {
 	if _, ok := annotations[annotation]; ok {
-		errs = errs.Also(apis.ErrDisallowedFields(fmt.Sprintf("[%s]", annotation)))
+		errs = errs.Also(apis.ErrDisallowedFields(fmt.Sprintf("metadata.annotations[%s]", annotation)))
 	}
 	return errs
 }
