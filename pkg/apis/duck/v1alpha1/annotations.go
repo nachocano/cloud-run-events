@@ -104,7 +104,7 @@ func ValidateAutoscalingAnnotations(ctx context.Context, annotations map[string]
 	if autoscalingClass, ok := annotations[AutoscalingClassAnnotation]; ok {
 		// Only supported autoscaling class is KEDA.
 		if autoscalingClass != KEDA {
-			errs = errs.Also(apis.ErrInvalidValue(AutoscalingClassAnnotation, autoscalingClass))
+			errs = errs.Also(apis.ErrInvalidValue(autoscalingClass, fmt.Sprintf("[%s]", AutoscalingClassAnnotation)))
 		}
 
 		minScale, errs := validateAnnotation(annotations, AutoscalingMinScaleAnnotation, minimumMinScale, errs)
@@ -112,7 +112,7 @@ func ValidateAutoscalingAnnotations(ctx context.Context, annotations map[string]
 		if maxScale < minScale {
 			errs = errs.Also(&apis.FieldError{
 				Message: fmt.Sprintf("maxScale=%d is less than minScale=%d", maxScale, minScale),
-				Paths:   []string{AutoscalingMaxScaleAnnotation, AutoscalingMinScaleAnnotation},
+				Paths:   []string{fmt.Sprintf("[%s]", AutoscalingMaxScaleAnnotation), fmt.Sprintf("[%s]", AutoscalingMinScaleAnnotation)},
 			})
 		}
 		_, errs = validateAnnotation(annotations, KedaAutoscalingPollingIntervalAnnotation, minimumKedaPollingInterval, errs)
@@ -131,11 +131,11 @@ func ValidateAutoscalingAnnotations(ctx context.Context, annotations map[string]
 func validateAnnotation(annotations map[string]string, annotation string, minimumValue int, errs *apis.FieldError) (int, *apis.FieldError) {
 	var value int
 	if val, ok := annotations[annotation]; !ok {
-		errs = errs.Also(apis.ErrMissingField(annotation))
+		errs = errs.Also(apis.ErrMissingField(fmt.Sprintf("[%s]", annotation)))
 	} else if v, err := strconv.Atoi(val); err != nil {
-		errs = errs.Also(apis.ErrInvalidValue(v, annotation))
+		errs = errs.Also(apis.ErrInvalidValue(val, fmt.Sprintf("[%s]", annotation)))
 	} else if v < minimumValue {
-		errs = errs.Also(apis.ErrOutOfBoundsValue(v, minimumValue, math.MaxInt32, annotation))
+		errs = errs.Also(apis.ErrOutOfBoundsValue(v, minimumValue, math.MaxInt32, fmt.Sprintf("[%s]", annotation)))
 	} else {
 		value = v
 	}
@@ -148,15 +148,15 @@ func setDefaultAnnotationIfNotPresent(obj *metav1.ObjectMeta, annotation string,
 	}
 }
 
-func deleteAnnotationIfPresent(obj *metav1.ObjectMeta, key string) {
-	if _, ok := obj.Annotations[key]; ok {
-		delete(obj.Annotations, key)
+func deleteAnnotationIfPresent(obj *metav1.ObjectMeta, annotation string) {
+	if _, ok := obj.Annotations[annotation]; ok {
+		delete(obj.Annotations, annotation)
 	}
 }
 
-func validateAnnotationNotExists(annotations map[string]string, key string, errs *apis.FieldError) *apis.FieldError {
-	if _, ok := annotations[key]; ok {
-		errs = errs.Also(apis.ErrDisallowedFields(key))
+func validateAnnotationNotExists(annotations map[string]string, annotation string, errs *apis.FieldError) *apis.FieldError {
+	if _, ok := annotations[annotation]; ok {
+		errs = errs.Also(apis.ErrDisallowedFields(fmt.Sprintf("[%s]", annotation)))
 	}
 	return errs
 }
