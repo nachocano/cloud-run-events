@@ -18,24 +18,25 @@ package keda
 
 import (
 	"context"
+	"github.com/google/knative-gcp/pkg/client/injection/ducks/duck/v1alpha1/resource"
+
 	duckv1alpha1 "github.com/google/knative-gcp/pkg/apis/duck/v1alpha1"
+	pullsubscriptioninformers "github.com/google/knative-gcp/pkg/client/injection/informers/pubsub/v1alpha1/pullsubscription"
 	gpubsub "github.com/google/knative-gcp/pkg/gclient/pubsub"
 	"github.com/google/knative-gcp/pkg/reconciler"
 	"github.com/google/knative-gcp/pkg/reconciler/pubsub"
+	psreconciler "github.com/google/knative-gcp/pkg/reconciler/pubsub/pullsubscription"
 	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap"
 	"k8s.io/client-go/tools/cache"
-	pkgreconciler "knative.dev/pkg/reconciler"
 
-	"github.com/google/knative-gcp/pkg/client/injection/ducks/duck/v1alpha1/resource"
-	pullsubscriptioninformers "github.com/google/knative-gcp/pkg/client/injection/informers/pubsub/v1alpha1/pullsubscription"
-	psreconciler "github.com/google/knative-gcp/pkg/reconciler/pubsub/pullsubscription"
 	eventingduck "knative.dev/eventing/pkg/duck"
 	deploymentinformer "knative.dev/pkg/client/injection/kube/informers/apps/v1/deployment"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/metrics"
+	pkgreconciler "knative.dev/pkg/reconciler"
 	"knative.dev/pkg/resolver"
 	tracingconfig "knative.dev/pkg/tracing/config"
 )
