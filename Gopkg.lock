@@ -1344,7 +1344,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:28f25596999cdc8967c1ec03fb8141ca0c3f687fcdfd45132133c811c578e644"
+  digest = "1:d727b4191a9182621e9b504a39281ff9d69a5da16ad721d05368781813ea5870"
   name = "knative.dev/eventing"
   packages = [
     "pkg/apis/configs",
@@ -1393,7 +1393,6 @@
     "pkg/client/listers/sources/v1alpha1",
     "pkg/configmap",
     "pkg/defaultchannel",
-    "pkg/duck",
     "pkg/kncloudevents",
     "pkg/legacyclient/clientset/versioned",
     "pkg/legacyclient/clientset/versioned/fake",
@@ -1405,7 +1404,6 @@
     "pkg/legacyclient/listers/legacysources/v1alpha1",
     "pkg/logconfig",
     "pkg/logging",
-    "pkg/reconciler/names",
     "pkg/reconciler/namespace/resources",
     "pkg/reconciler/testing",
     "pkg/tracing",
@@ -1423,11 +1421,11 @@
     "test/test_images/transformevents",
   ]
   pruneopts = "UT"
-  revision = "1f0e962c7ad034abae7660316511559304a403bd"
+  revision = "9a9b28aadd6baeb3f83c1dfb9f1d938495ebaaaf"
 
 [[projects]]
   branch = "master"
-  digest = "1:6e2169542b76688fe02763aee6b53dedc9d71acb8608705393c4230ffae94e68"
+  digest = "1:08f61d9c869f9ede5e90279575ac65a6147c190ef3ccc1cff2d38f9cf515353c"
   name = "knative.dev/pkg"
   packages = [
     "apis",
@@ -1439,7 +1437,6 @@
     "changeset",
     "client/injection/ducks/duck/v1/addressable",
     "client/injection/ducks/duck/v1/addressable/fake",
-    "client/injection/ducks/duck/v1alpha1/addressable",
     "client/injection/kube/client",
     "client/injection/kube/client/fake",
     "client/injection/kube/informers/admissionregistration/v1beta1/mutatingwebhookconfiguration",
@@ -1449,6 +1446,7 @@
     "client/injection/kube/informers/batch/v1/job",
     "client/injection/kube/informers/batch/v1/job/fake",
     "client/injection/kube/informers/core/v1/secret",
+    "client/injection/kube/informers/core/v1/secret/fake",
     "client/injection/kube/informers/factory",
     "client/injection/kube/informers/factory/fake",
     "codegen/cmd/injection-gen",
@@ -1502,11 +1500,11 @@
     "webhook/resourcesemantics/validation",
   ]
   pruneopts = "T"
-  revision = "1cc7b7152937735a29c9d6fdaf3b244684aa850e"
+  revision = "91a86d6aecdeaf91afe351e132c7c86047007563"
 
 [[projects]]
   branch = "master"
-  digest = "1:4f95d2e1c3434e07568b8428c35ccb9b8d14419597350e1e6093aa8654557d4c"
+  digest = "1:ac7808d642ab66317d8cbc2ba74320a21899d57de3bce731ffe2c6f540a8f3e9"
   name = "knative.dev/serving"
   packages = [
     "pkg/apis/autoscaling",
@@ -1557,7 +1555,7 @@
     "pkg/reconciler/route/config",
   ]
   pruneopts = "NUT"
-  revision = "3b43eae05e8489a0d5b601e203ea8bd155998f69"
+  revision = "d161feb8979a6f44b950270f71faee45df70ea84"
 
 [[projects]]
   branch = "master"
@@ -1637,6 +1635,7 @@
     "k8s.io/apimachinery/pkg/runtime/schema",
     "k8s.io/apimachinery/pkg/runtime/serializer",
     "k8s.io/apimachinery/pkg/types",
+    "k8s.io/apimachinery/pkg/util/clock",
     "k8s.io/apimachinery/pkg/util/intstr",
     "k8s.io/apimachinery/pkg/util/runtime",
     "k8s.io/apimachinery/pkg/util/sets",
@@ -1668,7 +1667,6 @@
     "k8s.io/code-generator/cmd/lister-gen",
     "knative.dev/eventing/pkg/apis/duck/v1alpha1",
     "knative.dev/eventing/pkg/apis/eventing/v1alpha1",
-    "knative.dev/eventing/pkg/duck",
     "knative.dev/eventing/pkg/kncloudevents",
     "knative.dev/eventing/pkg/logconfig",
     "knative.dev/eventing/pkg/tracing",
@@ -1693,6 +1691,8 @@
     "knative.dev/pkg/client/injection/kube/informers/apps/v1/deployment",
     "knative.dev/pkg/client/injection/kube/informers/apps/v1/deployment/fake",
     "knative.dev/pkg/client/injection/kube/informers/batch/v1/job/fake",
+    "knative.dev/pkg/client/injection/kube/informers/core/v1/secret",
+    "knative.dev/pkg/client/injection/kube/informers/core/v1/secret/fake",
     "knative.dev/pkg/codegen/cmd/injection-gen",
     "knative.dev/pkg/configmap",
     "knative.dev/pkg/controller",
@@ -1720,7 +1720,6 @@
     "knative.dev/pkg/testutils/clustermanager/perf-tests",
     "knative.dev/pkg/tracing",
     "knative.dev/pkg/tracing/config",
-    "knative.dev/pkg/tracker",
     "knative.dev/pkg/webhook",
     "knative.dev/pkg/webhook/certificates",
     "knative.dev/pkg/webhook/configmaps",
