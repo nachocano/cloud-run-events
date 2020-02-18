@@ -142,9 +142,9 @@ func validateAnnotation(annotations map[string]string, annotation string, minimu
 	return value, errs
 }
 
-func setDefaultAnnotationIfNotPresent(obj *metav1.ObjectMeta, key string, defaultValue string) {
-	if _, ok := obj.Annotations[key]; !ok {
-		obj.Annotations[key] = defaultValue
+func setDefaultAnnotationIfNotPresent(obj *metav1.ObjectMeta, annotation string, defaultValue string) {
+	if _, ok := obj.Annotations[annotation]; !ok {
+		obj.Annotations[annotation] = defaultValue
 	}
 }
 
