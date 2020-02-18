@@ -121,6 +121,7 @@ func MakeReceiveAdapter(ctx context.Context, args *ReceiveAdapterArgs) *v1.Deplo
 							Value: credsFile,
 						}, {
 							// Needed for Keda scaling.
+							// TODO set it only when using Keda.
 							Name:      "GOOGLE_APPLICATION_CREDENTIALS_JSON",
 							ValueFrom: &corev1.EnvVarSource{SecretKeyRef: secret},
 						}, {
