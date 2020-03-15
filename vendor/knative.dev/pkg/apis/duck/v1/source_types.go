@@ -83,12 +83,12 @@ type SourceStatus struct {
 	SinkURI *apis.URL `json:"sinkUri,omitempty"`
 
 	// +optional
-	CloudEventAttributes *CloudEventAttributes `json:"attributes,omitempty"`
+	CloudEventAttributes *CloudEventAttributes `json:"ceAttributes,omitempty"`
 }
 
 type CloudEventAttributes struct {
-	Types  []string `json:"type,omitempty"`
-	Source string   `json:source,omitempty`
+	Types  []string `json:"types,omitempty"`
+	Source string   `json:"source,omitempty"`
 }
 
 // IsReady returns true if the resource is ready overall.
