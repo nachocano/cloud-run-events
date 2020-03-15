@@ -1344,13 +1344,15 @@
   revision = "69764acb6e8e900b7c05296c5d3c9c19545475f9"
 
 [[projects]]
-  branch = "master"
-  digest = "1:e3fe9ad0866a881e5c4825c30a63e23b2b1fb8fc43fd872ee80b24403520a47d"
+  branch = "rt_registry"
+  digest = "1:0d7ab1eabf6dee6af0e698e006c3b9cc4ff2f158cb104a0baae509bc821d0051"
   name = "knative.dev/eventing"
   packages = [
     "pkg/apis/config",
     "pkg/apis/configs",
     "pkg/apis/configs/v1alpha1",
+    "pkg/apis/discovery",
+    "pkg/apis/discovery/v1alpha1",
     "pkg/apis/duck",
     "pkg/apis/duck/v1alpha1",
     "pkg/apis/duck/v1beta1",
@@ -1372,6 +1374,8 @@
     "pkg/client/clientset/versioned/scheme",
     "pkg/client/clientset/versioned/typed/configs/v1alpha1",
     "pkg/client/clientset/versioned/typed/configs/v1alpha1/fake",
+    "pkg/client/clientset/versioned/typed/discovery/v1alpha1",
+    "pkg/client/clientset/versioned/typed/discovery/v1alpha1/fake",
     "pkg/client/clientset/versioned/typed/eventing/v1alpha1",
     "pkg/client/clientset/versioned/typed/eventing/v1alpha1/fake",
     "pkg/client/clientset/versioned/typed/eventing/v1beta1",
@@ -1396,6 +1400,7 @@
     "pkg/client/listers/flows/v1alpha1",
     "pkg/client/listers/messaging/v1alpha1",
     "pkg/client/listers/sources/v1alpha1",
+    "pkg/client/listers/sources/v1alpha2",
     "pkg/configmap",
     "pkg/duck",
     "pkg/kncloudevents",
@@ -1419,11 +1424,12 @@
     "test/test_images/transformevents",
   ]
   pruneopts = "UT"
-  revision = "eecdd36d74a6317de6d65af0196730bc8cf44907"
+  revision = "db030203a4f00dcc5936cb943343ecbb7e5e3c45"
+  source = "github.com/nachocano/eventing"
 
 [[projects]]
-  branch = "master"
-  digest = "1:087752cbad644085941d5dbe2a04ef0c285fed9205006a5a3d3816256ac0fecd"
+  branch = "rt_registry"
+  digest = "1:e4d49bfeadfc3f0e31b622382293dd85943f80164f3c64bbf0389aa462036fca"
   name = "knative.dev/pkg"
   packages = [
     "apis",
@@ -1502,11 +1508,12 @@
     "webhook/resourcesemantics/validation",
   ]
   pruneopts = "T"
-  revision = "1893541a0fac5885032c8ec170fd81234de13f4a"
+  revision = "4ad3428483365e4cc70ed315cbd30244c90e19c3"
+  source = "github.com/nachocano/pkg"
 
 [[projects]]
   branch = "master"
-  digest = "1:41696c3f42bab4dbb1027f66e7666fad0c22e2f2648919f5391a6e7b4942b13a"
+  digest = "1:fb7db63670d75f351508b56cf97d5486f11b2d350b448b713bf4ffe877eac347"
   name = "knative.dev/serving"
   packages = [
     "pkg/apis/autoscaling",
@@ -1555,7 +1562,7 @@
     "pkg/client/listers/serving/v1beta1",
   ]
   pruneopts = "NUT"
-  revision = "34717bfa04b014f07cf52e4338afc99c60a85dda"
+  revision = "7b1931a9b860a145c13241c744cc09c6d1640d80"
 
 [[projects]]
   branch = "master"
@@ -1566,7 +1573,7 @@
     "tools/dep-collector",
   ]
   pruneopts = "UT"
-  revision = "3f96c9e98f31595fe33eaa2d95f5e2170522acd7"
+  revision = "9dd089bb6b337300edc5f59a87fd700651aca466"
 
 [[projects]]
   digest = "1:8730e0150dfb2b7e173890c8b9868e7a273082ef8e39f4940e3506a481cf895c"
