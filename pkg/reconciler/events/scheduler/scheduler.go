@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 
+	duckv1 "knative.dev/pkg/apis/duck/v1"
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/reconciler"
 
@@ -80,6 +81,12 @@ func (r *Reconciler) ReconcileKind(ctx context.Context, scheduler *v1alpha1.Clou
 		return reconciler.NewEvent(corev1.EventTypeWarning, reconciledFailedReason, "Reconcile Job failed with: %s", err.Error())
 	}
 	scheduler.Status.MarkJobReady(jobName)
+
+	scheduler.Status.SourceStatus.CloudEventAttributes = &duckv1.CloudEventAttributes{
+		Types:  []string{v1alpha1.CloudSchedulerSourceExecute},
+		Source: v1alpha1.CloudSchedulerSourceEventSource(resources.ExtractParentName(jobName), scheduler.Name),
+	}
+
 	return reconciler.NewEvent(corev1.EventTypeNormal, reconciledSuccessReason, `CloudSchedulerSource reconciled: "%s/%s"`, scheduler.Namespace, scheduler.Name)
 }
 

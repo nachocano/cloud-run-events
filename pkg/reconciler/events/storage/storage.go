@@ -23,6 +23,7 @@ import (
 	gstatus "google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
 
+	duckv1 "knative.dev/pkg/apis/duck/v1"
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/reconciler"
 
@@ -92,6 +93,11 @@ func (r *Reconciler) ReconcileKind(ctx context.Context, storage *v1alpha1.CloudS
 		return reconciler.NewEvent(corev1.EventTypeWarning, reconciledNotificationFailed, "Failed to reconcile CloudStorageSource notification: %s", err)
 	}
 	storage.Status.MarkNotificationReady(notification)
+
+	storage.Status.SourceStatus.CloudEventAttributes = &duckv1.CloudEventAttributes{
+		Types:  r.toCloudStorageSourceEventTypes(storage.Spec.EventTypes),
+		Source: v1alpha1.CloudStorageSourceEventSource(storage.Spec.Bucket),
+	}
 
 	return reconciler.NewEvent(corev1.EventTypeNormal, reconciledSuccessReason, `CloudStorageSource reconciled: "%s/%s"`, storage.Namespace, storage.Name)
 }

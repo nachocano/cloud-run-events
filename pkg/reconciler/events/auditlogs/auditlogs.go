@@ -32,6 +32,7 @@ import (
 	gpubsub "github.com/google/knative-gcp/pkg/gclient/pubsub"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	duckv1 "knative.dev/pkg/apis/duck/v1"
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/reconciler"
 )
@@ -77,7 +78,10 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, s *v1alpha1.CloudAuditLo
 	}
 	s.Status.StackdriverSink = sink
 	s.Status.MarkSinkReady()
-	c.Logger.Debugf("Reconciled Stackdriver sink: %+v", sink)
+
+	s.Status.SourceStatus.CloudEventAttributes = &duckv1.CloudEventAttributes{
+		Types: []string{v1alpha1.CloudAuditLogsSourceEvent},
+	}
 
 	return reconciler.NewEvent(corev1.EventTypeNormal, reconciledSuccessReason, `CloudAuditLogsSource reconciled: "%s/%s"`, s.Namespace, s.Name)
 }

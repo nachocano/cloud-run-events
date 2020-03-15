@@ -24,6 +24,7 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 
 	"knative.dev/pkg/apis"
+	duckv1 "knative.dev/pkg/apis/duck/v1"
 	"knative.dev/pkg/logging"
 	pkgreconciler "knative.dev/pkg/reconciler"
 
@@ -80,6 +81,11 @@ func (r *Reconciler) ReconcileKind(ctx context.Context, pubsub *v1alpha1.CloudPu
 		return pkgreconciler.NewEvent(corev1.EventTypeWarning, reconciledFailedReason, "Getting sink URI failed with: %s", err.Error())
 	} else {
 		pubsub.Status.SinkURI = sinkURI
+	}
+
+	pubsub.Status.SourceStatus.CloudEventAttributes = &duckv1.CloudEventAttributes{
+		Types:  []string{v1alpha1.CloudPubSubSourcePublish},
+		Source: v1alpha1.CloudPubSubSourceEventSource(ps.Status.ProjectID, pubsub.Spec.Topic),
 	}
 	return pkgreconciler.NewEvent(corev1.EventTypeNormal, reconciledSuccessReason, `CloudPubSubSource reconciled: "%s/%s"`, pubsub.Namespace, pubsub.Name)
 }
