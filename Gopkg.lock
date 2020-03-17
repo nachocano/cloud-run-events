@@ -270,7 +270,7 @@
   name = "github.com/google/go-containerregistry"
   packages = ["pkg/name"]
   pruneopts = "NUT"
-  revision = "ba53fa10e72c7373ef8068e21c9f102f0c20a940"
+  revision = "955bf358a3d8d1ebfa6204338ef3fe364255cd85"
 
 [[projects]]
   digest = "1:3ec6c8e4b700377066dbb5ab3155c55f97109ab6147fee9423a68506d79bbafa"
@@ -1345,14 +1345,12 @@
 
 [[projects]]
   branch = "rt_registry"
-  digest = "1:0d7ab1eabf6dee6af0e698e006c3b9cc4ff2f158cb104a0baae509bc821d0051"
+  digest = "1:514a96e47b87a224a169391fdfd04be5bccb2e17c4633839cdb80bdb94a171a6"
   name = "knative.dev/eventing"
   packages = [
     "pkg/apis/config",
     "pkg/apis/configs",
     "pkg/apis/configs/v1alpha1",
-    "pkg/apis/discovery",
-    "pkg/apis/discovery/v1alpha1",
     "pkg/apis/duck",
     "pkg/apis/duck/v1alpha1",
     "pkg/apis/duck/v1beta1",
@@ -1374,8 +1372,6 @@
     "pkg/client/clientset/versioned/scheme",
     "pkg/client/clientset/versioned/typed/configs/v1alpha1",
     "pkg/client/clientset/versioned/typed/configs/v1alpha1/fake",
-    "pkg/client/clientset/versioned/typed/discovery/v1alpha1",
-    "pkg/client/clientset/versioned/typed/discovery/v1alpha1/fake",
     "pkg/client/clientset/versioned/typed/eventing/v1alpha1",
     "pkg/client/clientset/versioned/typed/eventing/v1alpha1/fake",
     "pkg/client/clientset/versioned/typed/eventing/v1beta1",
@@ -1424,12 +1420,12 @@
     "test/test_images/transformevents",
   ]
   pruneopts = "UT"
-  revision = "25088f7b5da9230d56934de6dfb8e55b483e4296"
+  revision = "49b765ca2057f17c91bfe77b169584134fa97564"
   source = "github.com/nachocano/eventing"
 
 [[projects]]
   branch = "rt_registry"
-  digest = "1:778a39f59bd027248285ec9612c0cb7f744e9b462921a053315d4a9fceba541d"
+  digest = "1:0b3f8c5f58eea568cc69bfd877fe63d6a691300cc182d68fcfff60fa85dd290c"
   name = "knative.dev/pkg"
   packages = [
     "apis",
@@ -1508,7 +1504,7 @@
     "webhook/resourcesemantics/validation",
   ]
   pruneopts = "T"
-  revision = "51da3368e2aa648ce6fdfc655b99733f243d6a30"
+  revision = "8865f07c7f8220b881aede0d75e1a14144fc5971"
   source = "github.com/nachocano/pkg"
 
 [[projects]]
@@ -1562,7 +1558,7 @@
     "pkg/client/listers/serving/v1beta1",
   ]
   pruneopts = "NUT"
-  revision = "7b1931a9b860a145c13241c744cc09c6d1640d80"
+  revision = "9e6b24410b032d3a43c7d47b78b392353b7a7497"
 
 [[projects]]
   branch = "master"
@@ -1573,7 +1569,7 @@
     "tools/dep-collector",
   ]
   pruneopts = "UT"
-  revision = "9dd089bb6b337300edc5f59a87fd700651aca466"
+  revision = "5bd0584b00fb8bfd4e6fe3aa08a0b8121356a2d0"
 
 [[projects]]
   digest = "1:8730e0150dfb2b7e173890c8b9868e7a273082ef8e39f4940e3506a481cf895c"
