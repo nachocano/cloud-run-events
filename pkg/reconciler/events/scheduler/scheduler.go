@@ -82,10 +82,10 @@ func (r *Reconciler) ReconcileKind(ctx context.Context, scheduler *v1alpha1.Clou
 	}
 	scheduler.Status.MarkJobReady(jobName)
 
-	scheduler.Status.SourceStatus.CloudEventAttributes = &duckv1.CloudEventAttributes{
-		Types:  []string{v1alpha1.CloudSchedulerSourceExecute},
+	scheduler.Status.SourceStatus.CloudEventAttributes = []duckv1.CloudEventAttributes{{
+		Type:   v1alpha1.CloudSchedulerSourceExecute,
 		Source: v1alpha1.CloudSchedulerSourceEventSource(resources.ExtractParentName(jobName), scheduler.Name),
-	}
+	}}
 
 	return reconciler.NewEvent(corev1.EventTypeNormal, reconciledSuccessReason, `CloudSchedulerSource reconciled: "%s/%s"`, scheduler.Namespace, scheduler.Name)
 }

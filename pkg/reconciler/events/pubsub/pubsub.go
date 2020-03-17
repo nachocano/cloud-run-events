@@ -83,10 +83,10 @@ func (r *Reconciler) ReconcileKind(ctx context.Context, pubsub *v1alpha1.CloudPu
 		pubsub.Status.SinkURI = sinkURI
 	}
 
-	pubsub.Status.SourceStatus.CloudEventAttributes = &duckv1.CloudEventAttributes{
-		Types:  []string{v1alpha1.CloudPubSubSourcePublish},
+	pubsub.Status.SourceStatus.CloudEventAttributes = []duckv1.CloudEventAttributes{{
+		Type:   v1alpha1.CloudPubSubSourcePublish,
 		Source: v1alpha1.CloudPubSubSourceEventSource(ps.Status.ProjectID, pubsub.Spec.Topic),
-	}
+	}}
 	return pkgreconciler.NewEvent(corev1.EventTypeNormal, reconciledSuccessReason, `CloudPubSubSource reconciled: "%s/%s"`, pubsub.Namespace, pubsub.Name)
 }
 

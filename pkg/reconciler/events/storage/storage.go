@@ -94,10 +94,7 @@ func (r *Reconciler) ReconcileKind(ctx context.Context, storage *v1alpha1.CloudS
 	}
 	storage.Status.MarkNotificationReady(notification)
 
-	storage.Status.SourceStatus.CloudEventAttributes = &duckv1.CloudEventAttributes{
-		Types:  r.toCloudStorageSourceEventTypes(storage.Spec.EventTypes),
-		Source: v1alpha1.CloudStorageSourceEventSource(storage.Spec.Bucket),
-	}
+	storage.Status.SourceStatus.CloudEventAttributes = r.createCloudEventAttributes(storage)
 
 	return reconciler.NewEvent(corev1.EventTypeNormal, reconciledSuccessReason, `CloudStorageSource reconciled: "%s/%s"`, storage.Namespace, storage.Name)
 }
@@ -225,4 +222,16 @@ func (r *Reconciler) FinalizeKind(ctx context.Context, storage *v1alpha1.CloudSt
 
 	// ok to remove finalizer.
 	return nil
+}
+
+func (r *Reconciler) createCloudEventAttributes(storage *v1alpha1.CloudStorageSource) []duckv1.CloudEventAttributes {
+	ets := r.toCloudStorageSourceEventTypes(storage.Spec.EventTypes)
+	ceAttributes := make([]duckv1.CloudEventAttributes, 0, len(ets))
+	for _, et := range ets {
+		ceAttributes = append(ceAttributes, duckv1.CloudEventAttributes{
+			Type:   et,
+			Source: v1alpha1.CloudStorageSourceEventSource(storage.Spec.Bucket),
+		})
+	}
+	return ceAttributes
 }

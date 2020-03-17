@@ -79,9 +79,10 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, s *v1alpha1.CloudAuditLo
 	s.Status.StackdriverSink = sink
 	s.Status.MarkSinkReady()
 
-	s.Status.SourceStatus.CloudEventAttributes = &duckv1.CloudEventAttributes{
-		Types: []string{v1alpha1.CloudAuditLogsSourceEvent},
-	}
+	s.Status.SourceStatus.CloudEventAttributes = []duckv1.CloudEventAttributes{{
+		Type: v1alpha1.CloudAuditLogsSourceEvent,
+		// Do not know the Source at compile time.
+	}}
 
 	return reconciler.NewEvent(corev1.EventTypeNormal, reconciledSuccessReason, `CloudAuditLogsSource reconciled: "%s/%s"`, s.Namespace, s.Name)
 }
