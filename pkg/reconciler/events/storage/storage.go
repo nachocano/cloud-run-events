@@ -225,9 +225,8 @@ func (r *Reconciler) FinalizeKind(ctx context.Context, storage *v1alpha1.CloudSt
 }
 
 func (r *Reconciler) createCloudEventAttributes(storage *v1alpha1.CloudStorageSource) []duckv1.CloudEventAttributes {
-	ets := r.toCloudStorageSourceEventTypes(storage.Spec.EventTypes)
-	ceAttributes := make([]duckv1.CloudEventAttributes, 0, len(ets))
-	for _, et := range ets {
+	ceAttributes := make([]duckv1.CloudEventAttributes, 0, len(storage.Spec.EventTypes))
+	for _, et := range storage.Spec.EventTypes {
 		ceAttributes = append(ceAttributes, duckv1.CloudEventAttributes{
 			Type:   et,
 			Source: v1alpha1.CloudStorageSourceEventSource(storage.Spec.Bucket),
