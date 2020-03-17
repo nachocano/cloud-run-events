@@ -1420,12 +1420,12 @@
     "test/test_images/transformevents",
   ]
   pruneopts = "UT"
-  revision = "49b765ca2057f17c91bfe77b169584134fa97564"
+  revision = "8a152329446fc2374010ee67f29cca3672902a5d"
   source = "github.com/nachocano/eventing"
 
 [[projects]]
   branch = "rt_registry"
-  digest = "1:0b3f8c5f58eea568cc69bfd877fe63d6a691300cc182d68fcfff60fa85dd290c"
+  digest = "1:676ee8e56d4762603f4a421a75052343630872d0f101d1f4579b423b7c00948b"
   name = "knative.dev/pkg"
   packages = [
     "apis",
@@ -1504,7 +1504,7 @@
     "webhook/resourcesemantics/validation",
   ]
   pruneopts = "T"
-  revision = "8865f07c7f8220b881aede0d75e1a14144fc5971"
+  revision = "9fda7871b4573ac7471f52b28b01bcacdde6c9d5"
   source = "github.com/nachocano/pkg"
 
 [[projects]]
