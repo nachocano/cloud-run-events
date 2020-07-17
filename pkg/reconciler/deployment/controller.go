@@ -17,8 +17,6 @@ package deployment
 
 import (
 	"context"
-	"os"
-
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/tools/cache"
@@ -26,9 +24,11 @@ import (
 	"knative.dev/pkg/client/injection/kube/informers/core/v1/secret"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
+	"os"
 
 	"github.com/google/knative-gcp/pkg/apis/duck"
 	"github.com/google/knative-gcp/pkg/reconciler"
+	pkgreconciler "knative.dev/pkg/reconciler"
 )
 
 const (
@@ -56,21 +56,31 @@ func NewController(
 	deploymentInformer := deployment.Get(ctx)
 	secretInformer := secret.Get(ctx)
 
+	key := types.NamespacedName{Namespace: namespace, Name: deploymentName}
+
 	r := &Reconciler{
-		Base:             reconciler.NewBase(ctx, controllerAgentName, cmw),
+		Base: reconciler.NewBase(ctx, controllerAgentName, cmw),
+		LeaderAwareFuncs: pkgreconciler.LeaderAwareFuncs{
+			// Have this reconciler enqueue our singleton whenever it becomes leader.
+			PromoteFunc: func(bkt pkgreconciler.Bucket, enq func(pkgreconciler.Bucket, types.NamespacedName)) error {
+				enq(bkt, key)
+				return nil
+			},
+		},
 		deploymentLister: deploymentInformer.Lister(),
 		clock:            clock.RealClock{},
+		key:              key,
 	}
 
 	impl := controller.NewImpl(r, r.Logger, ReconcilerName)
 
 	r.Logger.Info("Setting up event handlers")
 
-	sentinel := impl.EnqueueSentinel(types.NamespacedName{Namespace: namespace, Name: deploymentName})
 	secretInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
 		FilterFunc: controller.FilterWithNameAndNamespace(namespace, secretName),
-		Handler:    handler(sentinel),
+		Handler:    handler(impl.Enqueue),
 	})
+
 	return impl
 }
 

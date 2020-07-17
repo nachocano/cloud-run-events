@@ -18,6 +18,7 @@ package deployment
 
 import (
 	"context"
+	"k8s.io/apimachinery/pkg/types"
 	"testing"
 	"time"
 
@@ -93,7 +94,11 @@ func TestAllCases(t *testing.T) {
 	defer logtesting.ClearAll()
 	table.Test(t, MakeFactory(func(ctx context.Context, listers *Listers, cmw configmap.Watcher, _ map[string]interface{}) controller.Reconciler {
 		return &Reconciler{
-			Base:             reconciler.NewBase(ctx, controllerAgentName, cmw),
+			Base: reconciler.NewBase(ctx, controllerAgentName, cmw),
+			key: types.NamespacedName{
+				Name:      testDeploymentName,
+				Namespace: testNS,
+			},
 			deploymentLister: listers.GetDeploymentLister(),
 			clock: clock.NewFakeClock(time.Date(
 				2019, 11, 17, 20, 34, 58, 651387237, time.UTC)),

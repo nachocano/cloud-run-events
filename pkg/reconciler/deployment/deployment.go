@@ -18,15 +18,17 @@ package deployment
 import (
 	"context"
 	"fmt"
+	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/google/knative-gcp/pkg/reconciler"
-	v1 "k8s.io/api/apps/v1"
+	"k8s.io/api/apps/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/clock"
 	appsv1listers "k8s.io/client-go/listers/apps/v1"
-	"k8s.io/client-go/tools/cache"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
+	pkgreconciler "knative.dev/pkg/reconciler"
 )
 
 const (
@@ -36,26 +38,34 @@ const (
 type Reconciler struct {
 	*reconciler.Base
 
+	pkgreconciler.LeaderAwareFuncs
+
 	// listers index properties about resources
 	deploymentLister appsv1listers.DeploymentLister
 
 	clock clock.Clock
+
+	key types.NamespacedName
 }
 
-// Check that our Reconciler implements controller.Reconciler
+// Check that our Reconciler implements controller.Reconciler.
 var _ controller.Reconciler = (*Reconciler)(nil)
+
+// Check that our Reconciler implements pkgreconciler.LeaderAware.
+var _ pkgreconciler.LeaderAware = (*Reconciler)(nil)
 
 // Reconciler implements controller.Reconciler. It gets the deployment and then update its annotation.
 // With this, the deployment will recreate the pods and they will pick up the latest secret image immediately.
 // Otherwise we would need to wait for 1 min for the deployment pods to pick up the updated secret.
-func (r *Reconciler) Reconcile(ctx context.Context, key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		logging.FromContext(ctx).Desugar().Error("Invalid resource key")
+func (r *Reconciler) Reconcile(ctx context.Context, _ string) error {
+
+	if !r.IsLeaderFor(r.key) {
+		logging.FromContext(ctx).Desugar().Debug("Skipping key %q, not the leader.", zap.Any("key", r.key))
 		return nil
 	}
+
 	// Get the deployment resource with this namespace/name
-	original, err := r.deploymentLister.Deployments(namespace).Get(name)
+	original, err := r.deploymentLister.Deployments(r.key.Namespace).Get(r.key.Name)
 	if apierrs.IsNotFound(err) {
 		// The resource may no longer exist, in which case we stop processing.
 		logging.FromContext(ctx).Desugar().Error("Deployment in work queue no longer exists")
