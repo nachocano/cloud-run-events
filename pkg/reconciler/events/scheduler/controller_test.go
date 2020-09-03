@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"knative.dev/pkg/configmap"
-	logtesting "knative.dev/pkg/logging/testing"
 	. "knative.dev/pkg/reconciler/testing"
 
 	iamtesting "github.com/google/knative-gcp/pkg/reconciler/testing"
@@ -29,16 +28,15 @@ import (
 	_ "knative.dev/pkg/client/injection/kube/informers/core/v1/serviceaccount/fake"
 
 	// Fake injection informers
-	_ "github.com/google/knative-gcp/pkg/client/clientset/versioned/typed/intevents/v1beta1/fake"
+	_ "github.com/google/knative-gcp/pkg/client/clientset/versioned/typed/intevents/v1/fake"
 	_ "github.com/google/knative-gcp/pkg/client/injection/client/fake"
-	_ "github.com/google/knative-gcp/pkg/client/injection/informers/events/v1beta1/cloudschedulersource/fake"
-	_ "github.com/google/knative-gcp/pkg/client/injection/informers/intevents/v1beta1/pullsubscription/fake"
-	_ "github.com/google/knative-gcp/pkg/client/injection/informers/intevents/v1beta1/topic/fake"
+	_ "github.com/google/knative-gcp/pkg/client/injection/informers/events/v1/cloudschedulersource/fake"
+	_ "github.com/google/knative-gcp/pkg/client/injection/informers/intevents/v1/pullsubscription/fake"
+	_ "github.com/google/knative-gcp/pkg/client/injection/informers/intevents/v1/topic/fake"
 	_ "github.com/google/knative-gcp/pkg/reconciler/testing"
 )
 
 func TestNew(t *testing.T) {
-	defer logtesting.ClearAll()
 	ctx, _ := SetupFakeContext(t)
 	cmw := configmap.NewStaticWatcher()
 	c := newController(ctx, cmw, iamtesting.NoopIAMPolicyManager, iamtesting.NewGCPAuthTestStore(t, nil))

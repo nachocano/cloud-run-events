@@ -18,7 +18,8 @@ package handler
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"runtime"
 	"testing"
 	"time"
 
@@ -28,10 +29,12 @@ import (
 	"github.com/cloudevents/sdk-go/v2/binding"
 	"github.com/cloudevents/sdk-go/v2/event"
 	"github.com/google/go-cmp/cmp"
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
 
 	"github.com/google/knative-gcp/pkg/broker/handler/processors"
+	kgcptesting "github.com/google/knative-gcp/pkg/testing"
 )
 
 const (
@@ -40,7 +43,7 @@ const (
 	testSub       = "test-testSub"
 )
 
-func testPubsubClient(ctx context.Context, t *testing.T, projectID string) (*pubsub.Client, func()) {
+func testPubsubClient(ctx context.Context, t testing.TB, projectID string) (*pubsub.Client, func()) {
 	t.Helper()
 	srv := pstest.NewServer()
 	conn, err := grpc.Dial(srv.Addr, grpc.WithInsecure())
@@ -85,7 +88,7 @@ func TestHandler(t *testing.T) {
 
 	eventCh := make(chan *event.Event)
 	processor := &processors.FakeProcessor{PrevEventsCh: eventCh}
-	h := NewHandler(sub, processor, time.Second, RetryPolicy{})
+	h := NewHandler(sub, processor, time.Second)
 	h.Start(ctx, func(err error) {})
 	defer h.Stop()
 	if !h.IsAlive() {
@@ -157,95 +160,62 @@ func TestHandler(t *testing.T) {
 	})
 }
 
-type firstNErrProc struct {
+type BenchProcessor struct {
 	processors.BaseProcessor
-	desiredErrCount, currErrCount int
-	successSignal                 chan struct{}
+
+	processed *semaphore.Weighted
 }
 
-func (p *firstNErrProc) Process(_ context.Context, _ *event.Event) error {
-	if p.currErrCount < p.desiredErrCount {
-		p.currErrCount++
-		return errors.New("always error")
-	}
-	p.successSignal <- struct{}{}
+func (p *BenchProcessor) Process(ctx context.Context, e *event.Event) error {
+	p.processed.Release(1)
 	return nil
 }
 
-func TestRetryBackoff(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	c, close := testPubsubClient(ctx, t, "test-project")
+func BenchmarkHandlerReceive(b *testing.B) {
+	for _, eventSize := range []int{0, 1000, 1000000} {
+		b.Run(fmt.Sprintf("%d bytes", eventSize), func(b *testing.B) {
+			runBench(b, eventSize)
+		})
+	}
+}
+
+func runBench(b *testing.B, eventSize int) {
+	ctx := context.Background()
+	c, close := testPubsubClient(ctx, b, testProjectID)
 	defer close()
 
-	topic, err := c.CreateTopic(ctx, "test-topic")
+	topic, err := c.CreateTopic(ctx, testTopic)
 	if err != nil {
-		t.Fatalf("failed to create topic: %v", err)
+		b.Fatalf("failed to create topic: %v", err)
 	}
-	sub, err := c.CreateSubscription(ctx, "test-sub", pubsub.SubscriptionConfig{
+	sub, err := c.CreateSubscription(ctx, testSub, pubsub.SubscriptionConfig{
 		Topic: topic,
 	})
 	if err != nil {
-		t.Fatalf("failed to create subscription: %v", err)
+		b.Fatalf("failed to create subscription: %v", err)
 	}
 
-	p, err := cepubsub.New(context.Background(),
-		cepubsub.WithClient(c),
-		cepubsub.WithProjectID("test-project"),
-		cepubsub.WithTopicID("test-topic"),
-	)
-	if err != nil {
-		t.Fatalf("failed to create cloudevents pubsub protocol: %v", err)
+	maxMsgs := 2 * int64(runtime.NumCPU())
+	processor := &BenchProcessor{
+		processed: semaphore.NewWeighted(maxMsgs),
 	}
-
-	delays := []time.Duration{}
-	desiredErrCount := 8
-	successSignal := make(chan struct{})
-	processor := &firstNErrProc{
-		desiredErrCount: desiredErrCount,
-		successSignal:   successSignal,
-	}
-	h := NewHandler(sub, processor, time.Second, RetryPolicy{MinBackoff: time.Millisecond, MaxBackoff: 16 * time.Millisecond})
-	// Mock sleep func to collect nack backoffs.
-	h.delayNack = func(d time.Duration) {
-		delays = append(delays, d)
-	}
+	h := NewHandler(sub, processor, time.Second)
 	h.Start(ctx, func(err error) {})
 	defer h.Stop()
 	if !h.IsAlive() {
-		t.Fatal("start handler didn't bring it alive")
+		b.Error("start handler didn't bring it alive")
 	}
-
-	testEvent := event.New()
-	testEvent.SetID("id")
-	testEvent.SetSource("source")
-	testEvent.SetSubject("subject")
-	testEvent.SetType("type")
-
-	if err := p.Send(ctx, binding.ToMessage(&testEvent)); err != nil {
-		t.Fatalf("failed to seed event to pubsub: %v", err)
+	testEvent := kgcptesting.NewTestEvent(b, eventSize)
+	msg := new(pubsub.Message)
+	if err := cepubsub.WritePubSubMessage(ctx, binding.ToMessage(testEvent), msg); err != nil {
+		b.Fatal(err)
 	}
-
-	// Wait until all desired errors were returned.
-	// Then stop the handler by cancel the context.
-	<-successSignal
-	cancel()
-
-	if len(delays) != desiredErrCount {
-		t.Errorf("retry count got=%d, want=%d", len(delays), desiredErrCount)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		processor.processed.Acquire(ctx, 1)
+		topic.Publish(ctx, msg)
 	}
-	if delays[0] != time.Millisecond {
-		t.Errorf("initial nack delay got=%v, want=%v", delays[0], time.Millisecond)
-	}
-	// We expect exponential backoff until MaxBackoff
-	for i := 1; i < len(delays); i++ {
-		wantDelay := 2 * delays[i-1]
-		if wantDelay > 16*time.Millisecond {
-			wantDelay = 16 * time.Millisecond
-		}
-		if delays[i] != wantDelay {
-			t.Errorf("delays[%d] got=%v, want=%v", i, delays[i], wantDelay)
-		}
-	}
+	processor.processed.Acquire(ctx, maxMsgs)
 }
 
 func nextEventWithTimeout(eventCh <-chan *event.Event) *event.Event {

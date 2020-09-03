@@ -18,7 +18,6 @@ package v1alpha1
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/knative-gcp/pkg/apis/convert"
 	"github.com/google/knative-gcp/pkg/apis/events/v1beta1"
@@ -27,29 +26,34 @@ import (
 
 // ConvertTo implements apis.Convertible.
 // Converts source (from v1beta1.CloudBuildSource) into v1alpha1.CloudBuildSource.
-func (source *CloudBuildSource) ConvertTo(_ context.Context, to apis.Convertible) error {
+func (source *CloudBuildSource) ConvertTo(ctx context.Context, to apis.Convertible) error {
 	switch sink := to.(type) {
 	case *v1beta1.CloudBuildSource:
 		sink.ObjectMeta = source.ObjectMeta
-		sink.Spec.PubSubSpec = convert.ToV1beta1PubSubSpec(source.Spec.PubSubSpec)
-		sink.Status.PubSubStatus = convert.ToV1beta1PubSubStatus(source.Status.PubSubStatus)
+		// v1beta1 CloudBuildSource implements duck v1 PubSubable
+		sink.Spec.PubSubSpec = convert.FromV1alpha1ToV1PubSubSpec(source.Spec.PubSubSpec)
+		sink.Status.PubSubStatus = convert.FromV1alpha1ToV1PubSubStatus(source.Status.PubSubStatus)
+		// Remove v1alpha1 as deprecated from the Status Condition when converting to a higher version.
+		convert.RemoveV1alpha1Deprecated(sink.ConditionSet(), &sink.Status.Status)
 		return nil
 	default:
-		return fmt.Errorf("unknown conversion, got: %T", sink)
-
+		return apis.ConvertToViaProxy(ctx, source, &v1beta1.CloudBuildSource{}, sink)
 	}
 }
 
 // ConvertFrom implements apis.Convertible.
 // Converts obj from v1alpha1.CloudBuildSource into v1beta1.CloudBuildSource.
-func (sink *CloudBuildSource) ConvertFrom(_ context.Context, from apis.Convertible) error {
+func (sink *CloudBuildSource) ConvertFrom(ctx context.Context, from apis.Convertible) error {
 	switch source := from.(type) {
 	case *v1beta1.CloudBuildSource:
 		sink.ObjectMeta = source.ObjectMeta
-		sink.Spec.PubSubSpec = convert.FromV1beta1PubSubSpec(source.Spec.PubSubSpec)
-		sink.Status.PubSubStatus = convert.FromV1beta1PubSubStatus(source.Status.PubSubStatus)
+		// v1beta1 CloudBuildSource implements duck v1 PubSubable
+		sink.Spec.PubSubSpec = convert.FromV1ToV1alpha1PubSubSpec(source.Spec.PubSubSpec)
+		sink.Status.PubSubStatus = convert.FromV1ToV1alpha1PubSubStatus(source.Status.PubSubStatus)
+		// Mark v1alpha1 as deprecated as a Status Condition when converting to v1alpha1.
+		convert.MarkV1alpha1Deprecated(sink.ConditionSet(), &sink.Status.Status)
 		return nil
 	default:
-		return fmt.Errorf("unknown conversion, got: %T", source)
+		return apis.ConvertFromViaProxy(ctx, source, &v1beta1.CloudBuildSource{}, sink)
 	}
 }

@@ -16,12 +16,11 @@
 
 source $(dirname "$0")/../vendor/knative.dev/test-infra/scripts/release.sh
 
-readonly UPGRADE_JOB_V_0_16="upgrade-to-v0.16.0.yaml"
-
 # Yaml files to generate, and the source config dir for them.
 declare -A COMPONENTS
 COMPONENTS=(
   ["cloud-run-events-core.yaml"]="config"
+  ["cloud-run-events-pre-install-jobs.yaml"]="config/pre-install/v0.18.0"
 )
 readonly COMPONENTS
 
@@ -41,11 +40,8 @@ function build_release() {
     LABEL_YAML_CMD=(cat)
   fi
 
-  # Create v0.16.0 upgrade job yaml
-  ko resolve ${KO_FLAGS} -f config/upgrade/v0.16.0/ | "${LABEL_YAML_CMD[@]}" > "${UPGRADE_JOB_V_0_16}"
-
   # Build the components
-  local all_yamls=(${UPGRADE_JOB_V_0_16})
+  local all_yamls=()
   for yaml in "${!COMPONENTS[@]}"; do
     local config="${COMPONENTS[${yaml}]}"
     echo "Building Cloud Run Events Components - ${config}"
@@ -66,4 +62,4 @@ function build_release() {
   ARTIFACTS_TO_PUBLISH="${all_yamls[@]}"
 }
 
-main $@
+main "$@"

@@ -38,11 +38,17 @@ import (
 const projectEnvKey = "PROJECT_ID"
 
 // NewMultiTopicDecoupleSink creates a new multiTopicDecoupleSink.
-func NewMultiTopicDecoupleSink(ctx context.Context, brokerConfig config.ReadonlyTargets, client *pubsub.Client) *multiTopicDecoupleSink {
+func NewMultiTopicDecoupleSink(
+	ctx context.Context,
+	brokerConfig config.ReadonlyTargets,
+	client *pubsub.Client,
+	publishSettings pubsub.PublishSettings) *multiTopicDecoupleSink {
+
 	return &multiTopicDecoupleSink{
-		logger:       logging.FromContext(ctx),
-		pubsub:       client,
-		brokerConfig: brokerConfig,
+		logger:          logging.FromContext(ctx),
+		pubsub:          client,
+		publishSettings: publishSettings,
+		brokerConfig:    brokerConfig,
 		// TODO(#1118): remove Topic when broker config is removed
 		topics: make(map[types.NamespacedName]*pubsub.Topic),
 	}
@@ -52,7 +58,8 @@ func NewMultiTopicDecoupleSink(ctx context.Context, brokerConfig config.Readonly
 // to the broker to which the events are sent.
 type multiTopicDecoupleSink struct {
 	// pubsub talks to pubsub.
-	pubsub *pubsub.Client
+	pubsub          *pubsub.Client
+	publishSettings pubsub.PublishSettings
 	// map from brokers to topics
 	topics    map[types.NamespacedName]*pubsub.Topic
 	topicsMut sync.RWMutex
@@ -134,13 +141,13 @@ func (m *multiTopicDecoupleSink) getTopicIDForBroker(broker types.NamespacedName
 		m.logger.Warn("config is not found for", zap.String("broker", broker.String()))
 		return "", fmt.Errorf("%q: %w", broker, ErrNotFound)
 	}
-	if brokerConfig.State != config.State_READY {
-		m.logger.Debug("broker is not ready", zap.Any("ns", broker.Namespace), zap.Any("broker", broker))
-		return "", fmt.Errorf("%q: %w", broker, ErrNotReady)
-	}
 	if brokerConfig.DecoupleQueue == nil || brokerConfig.DecoupleQueue.Topic == "" {
 		m.logger.Error("DecoupleQueue or topic missing for broker, this should NOT happen.", zap.Any("brokerConfig", brokerConfig))
 		return "", fmt.Errorf("decouple queue of %q: %w", broker, ErrIncomplete)
+	}
+	if brokerConfig.DecoupleQueue.State != config.State_READY {
+		m.logger.Debug("decouple queue is not ready", zap.Any("ns", broker.Namespace), zap.Any("broker", broker))
+		return "", fmt.Errorf("%q: %w", broker, ErrNotReady)
 	}
 	return brokerConfig.DecoupleQueue.Topic, nil
 }

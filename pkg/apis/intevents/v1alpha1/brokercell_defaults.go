@@ -23,8 +23,31 @@ import (
 )
 
 const (
-	minReplicas int32 = 1
-	maxReplicas int32 = 10
+	avgCPUUtilizationFanout  int32 = 95
+	avgCPUUtilizationIngress int32 = 95
+	avgCPUUtilizationRetry   int32 = 95
+	// The limit we set (for Fanout and Retry) is 3000Mi which is mostly used
+	// to prevent surging memory usage causing OOM.
+	// Here we only set half of the limit so that in case of surging memory
+	// usage, HPA could have enough time to kick in.
+	// See: https://github.com/google/knative-gcp/issues/1265
+	avgMemoryUsageFanout  string = "1500Mi"
+	avgMemoryUsageIngress string = "1500Mi"
+	avgMemoryUsageRetry   string = "1500Mi"
+	cpuRequestFanout      string = "1500m"
+	cpuRequestIngress     string = "2000m"
+	cpuRequestRetry       string = "1000m"
+	cpuLimitFanout        string = ""
+	cpuLimitIngress       string = ""
+	cpuLimitRetry         string = ""
+	memoryRequestFanout   string = "500Mi"
+	memoryRequestIngress  string = "2000Mi"
+	memoryRequestRetry    string = "500Mi"
+	memoryLimitFanout     string = "3000Mi"
+	memoryLimitIngress    string = "2000Mi"
+	memoryLimitRetry      string = "3000Mi"
+	minReplicas           int32  = 1
+	maxReplicas           int32  = 10
 )
 
 // SetDefaults sets the default field values for a BrokerCell.
@@ -35,22 +58,39 @@ func (bc *BrokerCell) SetDefaults(ctx context.Context) {
 
 // SetDefaults sets the default field values for a BrokerCellSpec.
 func (bcs *BrokerCellSpec) SetDefaults(ctx context.Context) {
-	if bcs.Components.Fanout.MinReplicas == nil {
-		bcs.Components.Fanout.MinReplicas = ptr.Int32(minReplicas)
+	// Fanout defaults
+	if bcs.Components.Fanout == nil {
+		bcs.Components.Fanout = makeComponent(cpuRequestFanout, cpuLimitFanout, memoryRequestFanout, memoryLimitFanout, avgCPUUtilizationFanout, avgMemoryUsageFanout)
 	}
-	if bcs.Components.Fanout.MaxReplicas == nil {
-		bcs.Components.Fanout.MaxReplicas = ptr.Int32(maxReplicas)
+	bcs.Components.Fanout.setAutoScalingDefaults()
+	// Ingress defaults
+	if bcs.Components.Ingress == nil {
+		bcs.Components.Ingress = makeComponent(cpuRequestIngress, cpuLimitIngress, memoryRequestIngress, memoryLimitIngress, avgCPUUtilizationIngress, avgMemoryUsageIngress)
 	}
-	if bcs.Components.Retry.MinReplicas == nil {
-		bcs.Components.Retry.MinReplicas = ptr.Int32(minReplicas)
+	bcs.Components.Ingress.setAutoScalingDefaults()
+	// Retry defaults
+	if bcs.Components.Retry == nil {
+		bcs.Components.Retry = makeComponent(cpuRequestRetry, cpuLimitRetry, memoryRequestRetry, memoryLimitRetry, avgCPUUtilizationRetry, avgMemoryUsageRetry)
 	}
-	if bcs.Components.Retry.MaxReplicas == nil {
-		bcs.Components.Retry.MaxReplicas = ptr.Int32(maxReplicas)
+	bcs.Components.Retry.setAutoScalingDefaults()
+}
+
+func makeComponent(cpuRequest, cpuLimit, memoryRequest, memoryLimit string, avgCPUUtilization int32, targetMemoryUsage string) *ComponentParameters {
+	return &ComponentParameters{
+		CPURequest:        cpuRequest,
+		CPULimit:          cpuLimit,
+		MemoryRequest:     memoryRequest,
+		MemoryLimit:       memoryLimit,
+		AvgCPUUtilization: ptr.Int32(avgCPUUtilization),
+		AvgMemoryUsage:    ptr.String(targetMemoryUsage),
 	}
-	if bcs.Components.Ingress.MinReplicas == nil {
-		bcs.Components.Ingress.MinReplicas = ptr.Int32(minReplicas)
+}
+
+func (componentParams *ComponentParameters) setAutoScalingDefaults() {
+	if componentParams.MinReplicas == nil {
+		componentParams.MinReplicas = ptr.Int32(minReplicas)
 	}
-	if bcs.Components.Ingress.MaxReplicas == nil {
-		bcs.Components.Ingress.MaxReplicas = ptr.Int32(maxReplicas)
+	if componentParams.MaxReplicas == nil {
+		componentParams.MaxReplicas = ptr.Int32(maxReplicas)
 	}
 }

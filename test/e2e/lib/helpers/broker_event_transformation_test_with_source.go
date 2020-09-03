@@ -182,8 +182,8 @@ func BrokerEventTransformationMetricsTestHelper(client *lib.Client, projectID st
 			BrokerNamespace: client.Namespace,
 			StartTime:       start,
 			CountPerTriggerWithRespCode: map[lib.TriggerAssertionKey]int64{
-				{Name: trigger.Name, RespCode: http.StatusAccepted}:     1,
-				{Name: respTrigger.Name, RespCode: http.StatusAccepted}: 1,
+				{Name: trigger.Name, RespCode: http.StatusAccepted}: 1,
+				{Name: respTrigger.Name, RespCode: http.StatusOK}:   1,
 				// Metric from first two delivery attempts (which would fail).
 				{Name: trigger.Name, RespCode: http.StatusBadRequest}: 2,
 			},
@@ -416,7 +416,7 @@ func BrokerEventTransformationTestWithAuditLogsSourceHelper(client *lib.Client, 
 		ServiceAccountName: authConfig.ServiceAccountName,
 	})
 
-	client.Core.WaitForResourceReadyOrFail(auditlogsName, lib.CloudAuditLogsSourceTypeMeta)
+	client.Core.WaitForResourceReadyOrFail(auditlogsName, lib.CloudAuditLogsSourceV1TypeMeta)
 
 	// Audit logs source misses the topic which gets created shortly after the source becomes ready. Need to wait for a few seconds.
 	time.Sleep(resources.WaitCALTime)

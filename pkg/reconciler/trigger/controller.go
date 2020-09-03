@@ -18,9 +18,9 @@ package trigger
 
 import (
 	"context"
-	"os"
 
 	"cloud.google.com/go/pubsub"
+	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
@@ -57,15 +57,25 @@ const (
 // filterBroker is the function to filter brokers with proper brokerclass.
 var filterBroker = pkgreconciler.AnnotationFilterFunc(eventingv1beta1.BrokerClassAnnotationKey, brokerv1beta1.BrokerClass, false /*allowUnset*/)
 
+type envConfig struct {
+	ProjectID string `envconfig:"PROJECT_ID"`
+}
+
 func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
+	var env envConfig
+	if err := envconfig.Process("", &env); err != nil {
+		logging.FromContext(ctx).Fatal("Failed to process env var", zap.Error(err))
+	}
+
 	triggerInformer := triggerinformer.Get(ctx)
 
 	// If there is an error, the projectID will be empty. The reconciler will retry
 	// to get the projectID during reconciliation.
-	projectID, err := utils.ProjectID(os.Getenv(utils.ProjectIDEnvKey), metadataClient.NewDefaultMetadataClient())
+	projectID, err := utils.ProjectID(env.ProjectID, metadataClient.NewDefaultMetadataClient())
 	if err != nil {
 		logging.FromContext(ctx).Error("Failed to get project ID", zap.Error(err))
 	}
+
 	// Attempt to create a pubsub client for all worker threads to use. If this
 	// fails, pass a nil value to the Reconciler. They will attempt to
 	// create a client on reconcile.

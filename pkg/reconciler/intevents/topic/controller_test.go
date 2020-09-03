@@ -27,7 +27,6 @@ import (
 	tracingconfig "knative.dev/pkg/tracing/config"
 
 	"knative.dev/pkg/configmap"
-	logtesting "knative.dev/pkg/logging/testing"
 	. "knative.dev/pkg/reconciler/testing"
 
 	// Fake injection informers
@@ -36,11 +35,10 @@ import (
 	_ "knative.dev/pkg/client/injection/kube/informers/core/v1/serviceaccount/fake"
 	_ "knative.dev/serving/pkg/client/injection/informers/serving/v1/service/fake"
 
-	_ "github.com/google/knative-gcp/pkg/client/injection/informers/intevents/v1beta1/topic/fake"
+	_ "github.com/google/knative-gcp/pkg/client/injection/informers/intevents/v1/topic/fake"
 )
 
 func TestNew(t *testing.T) {
-	defer logtesting.ClearAll()
 	ctx, _ := SetupFakeContext(t)
 
 	_ = os.Setenv("PUBSUB_PUBLISHER_IMAGE", "PUBSUB_PUBLISHER_IMAGE")

@@ -28,7 +28,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"knative.dev/pkg/apis"
-	logtesting "knative.dev/pkg/logging/testing"
 )
 
 func TestValidateAutoscalingAnnotations(t *testing.T) {
@@ -127,8 +126,33 @@ func TestCheckImmutableClusterNameAnnotation(t *testing.T) {
 		current  *v1.ObjectMeta
 		error    bool
 	}{
-		"update empty annotation": {
+		"unchanged nil annotation": {
 			original: &v1.ObjectMeta{},
+			current:  &v1.ObjectMeta{},
+			error:    false,
+		},
+		"unchanged empty annotation": {
+			original: &v1.ObjectMeta{
+				Annotations: map[string]string{},
+			},
+			current: &v1.ObjectMeta{
+				Annotations: map[string]string{},
+			},
+			error: false,
+		},
+		"update nil annotation": {
+			original: &v1.ObjectMeta{},
+			current: &v1.ObjectMeta{
+				Annotations: map[string]string{
+					ClusterNameAnnotation: testingMetadataClient.FakeClusterName,
+				},
+			},
+			error: false,
+		},
+		"update empty annotation": {
+			original: &v1.ObjectMeta{
+				Annotations: map[string]string{},
+			},
 			current: &v1.ObjectMeta{
 				Annotations: map[string]string{
 					ClusterNameAnnotation: testingMetadataClient.FakeClusterName,
@@ -167,6 +191,95 @@ func TestCheckImmutableClusterNameAnnotation(t *testing.T) {
 		t.Run(n, func(t *testing.T) {
 			var err *apis.FieldError
 			err = CheckImmutableClusterNameAnnotation(tc.current, tc.original, err)
+			if tc.error != (err != nil) {
+				t.Fatalf("Unexpected validation failure. Got %v", err)
+			}
+		})
+	}
+}
+
+func TestCheckImmutableAutoscalingClassAnnotation(t *testing.T) {
+	testCases := map[string]struct {
+		original *v1.ObjectMeta
+		current  *v1.ObjectMeta
+		error    bool
+	}{
+		"unchanged nil annotation": {
+			original: &v1.ObjectMeta{},
+			current:  &v1.ObjectMeta{},
+			error:    false,
+		},
+		"unchanged empty annotation": {
+			original: &v1.ObjectMeta{
+				Annotations: map[string]string{},
+			},
+			current: &v1.ObjectMeta{
+				Annotations: map[string]string{},
+			},
+			error: false,
+		},
+		"update nil annotation": {
+			original: &v1.ObjectMeta{},
+			current: &v1.ObjectMeta{
+				Annotations: map[string]string{
+					AutoscalingClassAnnotation: KEDA,
+				},
+			},
+			error: true,
+		},
+		"update empty annotation": {
+			original: &v1.ObjectMeta{
+				Annotations: map[string]string{},
+			},
+			current: &v1.ObjectMeta{
+				Annotations: map[string]string{
+					AutoscalingClassAnnotation: KEDA,
+				},
+			},
+			error: true,
+		},
+		"update non-empty annotation": {
+			original: &v1.ObjectMeta{
+				Annotations: map[string]string{
+					AutoscalingClassAnnotation: KEDA,
+				},
+			},
+			current: &v1.ObjectMeta{
+				Annotations: map[string]string{
+					AutoscalingClassAnnotation: "new-value",
+				},
+			},
+			error: true,
+		},
+		"delete annotation": {
+			original: &v1.ObjectMeta{
+				Annotations: map[string]string{
+					AutoscalingClassAnnotation: KEDA,
+				},
+			},
+			current: &v1.ObjectMeta{
+				Annotations: map[string]string{},
+			},
+			error: true,
+		},
+		"unchanged annotation": {
+			original: &v1.ObjectMeta{
+				Annotations: map[string]string{
+					AutoscalingClassAnnotation: KEDA,
+				},
+			},
+			current: &v1.ObjectMeta{
+				Annotations: map[string]string{
+					AutoscalingClassAnnotation: KEDA,
+				},
+			},
+			error: false,
+		},
+	}
+	for n, tc := range testCases {
+		t.Run(n, func(t *testing.T) {
+			var err *apis.FieldError
+			err = CheckImmutableAutoscalingClassAnnotations(tc.current, tc.original, err)
 			if tc.error != (err != nil) {
 				t.Fatalf("Unexpected validation failure. Got %v", err)
 			}
@@ -223,8 +336,6 @@ func TestValidateCredential(t *testing.T) {
 		serviceAccount: "test",
 		wantErr:        true,
 	}}
-
-	defer logtesting.ClearAll()
 
 	for _, tc := range testCases {
 		errs := ValidateCredential(tc.secret, tc.serviceAccount)

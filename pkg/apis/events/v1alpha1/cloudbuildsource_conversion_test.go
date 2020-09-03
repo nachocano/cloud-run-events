@@ -21,6 +21,11 @@ import (
 	"net/url"
 	"testing"
 
+	v1 "github.com/google/knative-gcp/pkg/apis/events/v1"
+
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/knative-gcp/pkg/apis/convert"
+
 	"github.com/google/knative-gcp/pkg/apis/events/v1beta1"
 
 	"github.com/google/go-cmp/cmp"
@@ -41,7 +46,7 @@ var (
 			PubSubSpec: gcptesting.CompleteV1alpha1PubSubSpec,
 		},
 		Status: CloudBuildSourceStatus{
-			PubSubStatus: gcptesting.CompleteV1alpha1PubSubStatus,
+			PubSubStatus: gcptesting.CompleteV1alpha1PubSubStatusWithoutServiceAccountName,
 		},
 	}
 )
@@ -60,7 +65,7 @@ func TestCloudBuildSourceConversionBadType(t *testing.T) {
 
 func TestClouBuildSourceConversion(t *testing.T) {
 	// Just one for now, just adding the for loop for ease of future changes.
-	versions := []apis.Convertible{&v1beta1.CloudBuildSource{}}
+	versions := []apis.Convertible{&v1beta1.CloudBuildSource{}, &v1.CloudBuildSource{}}
 
 	tests := []struct {
 		name string
@@ -90,6 +95,20 @@ func TestClouBuildSourceConversion(t *testing.T) {
 				if err := got.ConvertFrom(context.Background(), ver); err != nil {
 					t.Errorf("ConvertFrom() = %v", err)
 				}
+
+				// Make sure the Deprecated Condition is added to the Status after converted back to v1alpha1,
+				// We need to ignore the LastTransitionTime as it is set in real time when doing the comparison.
+				dc := got.Status.GetCondition(convert.DeprecatedType)
+				if dc == nil {
+					t.Errorf("ConvertFrom() should add a deprecated warning condition but it does not.")
+				} else if diff := cmp.Diff(*dc, convert.DeprecatedV1Alpha1Condition,
+					cmpopts.IgnoreFields(apis.Condition{}, "LastTransitionTime")); diff != "" {
+					t.Errorf("Failed to verify deprecated condition (-want, + got) = %v", diff)
+				}
+				// Remove the Deprecated Condition from Status to compare the remaining of fields.
+				cs := apis.NewLivingConditionSet()
+				cs.Manage(&got.Status).ClearCondition(convert.DeprecatedType)
+
 				ignoreUsername := cmp.AllowUnexported(url.Userinfo{})
 				if diff := cmp.Diff(test.in, got, ignoreUsername); diff != "" {
 					t.Errorf("roundtrip (-want, +got) = %v", diff)

@@ -24,7 +24,6 @@ import (
 
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/logging"
-	logtesting "knative.dev/pkg/logging/testing"
 	"knative.dev/pkg/metrics"
 	_ "knative.dev/pkg/metrics/testing"
 	. "knative.dev/pkg/reconciler/testing"
@@ -35,8 +34,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	// Fake injection informers and clients
-	_ "github.com/google/knative-gcp/pkg/client/injection/ducks/duck/v1beta1/resource/fake"
-	_ "github.com/google/knative-gcp/pkg/client/injection/informers/intevents/v1beta1/pullsubscription/fake"
+	_ "github.com/google/knative-gcp/pkg/client/injection/ducks/duck/v1/resource/fake"
+	_ "github.com/google/knative-gcp/pkg/client/injection/informers/intevents/v1/pullsubscription/fake"
 	_ "knative.dev/pkg/client/injection/ducks/duck/v1/addressable/fake"
 	_ "knative.dev/pkg/client/injection/kube/informers/apps/v1/deployment/fake"
 	_ "knative.dev/pkg/client/injection/kube/informers/batch/v1/job/fake"
@@ -45,7 +44,6 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	defer logtesting.ClearAll()
 	ctx, _ := SetupFakeContext(t)
 
 	_ = os.Setenv("PUBSUB_RA_IMAGE", "PUBSUB_RA_IMAGE")

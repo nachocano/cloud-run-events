@@ -33,6 +33,11 @@ import (
 
 func (current *PullSubscription) Validate(ctx context.Context) *apis.FieldError {
 	errs := current.Spec.Validate(ctx).ViaField("spec")
+
+	if apis.IsInUpdate(ctx) {
+		original := apis.GetBaseline(ctx).(*PullSubscription)
+		errs = errs.Also(current.CheckImmutableFields(ctx, original))
+	}
 	return duck.ValidateAutoscalingAnnotations(ctx, current.Annotations, errs)
 }
 
@@ -113,16 +118,20 @@ func (current *PullSubscription) CheckImmutableFields(ctx context.Context, origi
 	}
 
 	var errs *apis.FieldError
-	// Modification of Topic, Secret and Project are not allowed. Everything else is mutable.
+	// Modification of Topic, Secret, Mode, AckDeadline, RetainAckedMessages, RetentionDuration and Project are not allowed.
+	// Everything else is mutable.
 	if diff := cmp.Diff(original.Spec, current.Spec,
 		cmpopts.IgnoreFields(PullSubscriptionSpec{},
-			"Sink", "Transformer", "Mode", "AckDeadline", "RetainAckedMessages", "RetentionDuration", "CloudEventOverrides")); diff != "" {
+			"Sink", "Transformer", "CloudEventOverrides")); diff != "" {
 		errs = errs.Also(&apis.FieldError{
 			Message: "Immutable fields changed (-old +new)",
 			Paths:   []string{"spec"},
 			Details: diff,
 		})
 	}
+	// Modification of AutoscalingClassAnnotations is not allowed.
+	errs = duck.CheckImmutableAutoscalingClassAnnotations(&current.ObjectMeta, &original.ObjectMeta, errs)
+
 	// Modification of non-empty cluster name annotation is not allowed.
 	return duck.CheckImmutableClusterNameAnnotation(&current.ObjectMeta, &original.ObjectMeta, errs)
 }

@@ -70,29 +70,25 @@ var brokerConfig = &config.TargetsConfig{
 			Id:            "b-uid-1",
 			Name:          "broker1",
 			Namespace:     "ns1",
-			DecoupleQueue: &config.Queue{Topic: topicID},
-			State:         config.State_READY,
+			DecoupleQueue: &config.Queue{Topic: topicID, State: config.State_READY},
 		},
 		"ns2/broker2": {
 			Id:            "b-uid-2",
 			Name:          "broker2",
 			Namespace:     "ns2",
 			DecoupleQueue: nil,
-			State:         config.State_READY,
 		},
 		"ns3/broker3": {
 			Id:            "b-uid-3",
 			Name:          "broker3",
 			Namespace:     "ns3",
 			DecoupleQueue: &config.Queue{Topic: ""},
-			State:         config.State_READY,
 		},
-		"ns4/broker-not-ready": {
+		"ns4/broker4": {
 			Id:            "b-uid-4",
 			Name:          "broker4",
 			Namespace:     "ns4",
-			DecoupleQueue: &config.Queue{Topic: "topic4"},
-			State:         config.State_UNKNOWN,
+			DecoupleQueue: &config.Queue{Topic: "topic4", State: config.State_UNKNOWN},
 		},
 	},
 }
@@ -213,14 +209,14 @@ func TestHandler(t *testing.T) {
 			},
 		},
 		{
-			name:           "broker not ready",
-			path:           "/ns4/broker-not-ready",
+			name:           "decouple queue not ready",
+			path:           "/ns4/broker4",
 			event:          createTestEvent("test-event"),
 			wantCode:       nethttp.StatusServiceUnavailable,
 			wantEventCount: 1,
 			wantMetricTags: map[string]string{
 				metricskey.LabelNamespaceName:     "ns4",
-				metricskey.LabelBrokerName:        "broker-not-ready",
+				metricskey.LabelBrokerName:        "broker4",
 				metricskey.LabelEventType:         eventType,
 				metricskey.LabelResponseCode:      "503",
 				metricskey.LabelResponseCodeClass: "5xx",
@@ -338,7 +334,7 @@ func runIngressHandlerBenchmark(b *testing.B, eventSize int) {
 	defer psSrv.Close()
 
 	psClient := createPubsubClient(ctx, b, psSrv)
-	decouple := NewMultiTopicDecoupleSink(ctx, memory.NewTargets(brokerConfig), psClient)
+	decouple := NewMultiTopicDecoupleSink(ctx, memory.NewTargets(brokerConfig), psClient, pubsub.DefaultPublishSettings)
 	statsReporter, err := metrics.NewIngressReporter(metrics.PodName(pod), metrics.ContainerName(container))
 	if err != nil {
 		b.Fatal(err)
@@ -409,7 +405,7 @@ func setupTestReceiver(ctx context.Context, t testing.TB, psSrv *pstest.Server) 
 
 // createAndStartIngress creates an ingress and calls its Start() method in a goroutine.
 func createAndStartIngress(ctx context.Context, t testing.TB, psSrv *pstest.Server) string {
-	decouple := NewMultiTopicDecoupleSink(ctx, memory.NewTargets(brokerConfig), createPubsubClient(ctx, t, psSrv))
+	decouple := NewMultiTopicDecoupleSink(ctx, memory.NewTargets(brokerConfig), createPubsubClient(ctx, t, psSrv), pubsub.DefaultPublishSettings)
 
 	receiver := &testHttpMessageReceiver{urlCh: make(chan string)}
 	statsReporter, err := metrics.NewIngressReporter(metrics.PodName(pod), metrics.ContainerName(container))

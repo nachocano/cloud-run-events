@@ -46,6 +46,10 @@ type Args struct {
 	ServiceAccountName string
 	MetricsPort        int
 	AllowIstioSidecar  bool
+	CPURequest         string
+	CPULimit           string
+	MemoryRequest      string
+	MemoryLimit        string
 }
 
 // IngressArgs are the arguments to create a Broker's ingress Deployment.
@@ -68,8 +72,8 @@ type RetryArgs struct {
 type AutoscalingArgs struct {
 	ComponentName     string
 	BrokerCell        *intv1alpha1.BrokerCell
-	AvgCPUUtilization int32
-	AvgMemoryUsage    string
+	AvgCPUUtilization *int32
+	AvgMemoryUsage    *string
 	MaxReplicas       int32
 	MinReplicas       int32
 }
