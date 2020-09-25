@@ -25,19 +25,21 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/google/knative-gcp/pkg/logging"
 	"knative.dev/eventing/pkg/apis/eventing"
 	eventingv1beta1 "knative.dev/eventing/pkg/apis/eventing/v1beta1"
 	"knative.dev/eventing/pkg/duck"
-	"knative.dev/eventing/pkg/logging"
 	"knative.dev/pkg/client/injection/ducks/duck/v1/addressable"
 	"knative.dev/pkg/client/injection/ducks/duck/v1/conditions"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	pkgcontroller "knative.dev/pkg/controller"
+	"knative.dev/pkg/injection"
 	pkgreconciler "knative.dev/pkg/reconciler"
 	"knative.dev/pkg/resolver"
 
 	brokerv1beta1 "github.com/google/knative-gcp/pkg/apis/broker/v1beta1"
+	"github.com/google/knative-gcp/pkg/apis/configs/dataresidency"
 	brokerinformer "github.com/google/knative-gcp/pkg/client/injection/informers/broker/v1beta1/broker"
 	triggerinformer "github.com/google/knative-gcp/pkg/client/injection/informers/broker/v1beta1/trigger"
 	triggerreconciler "github.com/google/knative-gcp/pkg/client/injection/reconciler/broker/v1beta1/trigger"
@@ -61,7 +63,16 @@ type envConfig struct {
 	ProjectID string `envconfig:"PROJECT_ID"`
 }
 
-func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
+type Constructor injection.ControllerConstructor
+
+// NewConstructor creates a constructor to make a Trigger controller.
+func NewConstructor(dataresidencyss *dataresidency.StoreSingleton) Constructor {
+	return func(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
+		return newController(ctx, cmw, dataresidencyss.Store(ctx, cmw))
+	}
+}
+
+func newController(ctx context.Context, cmw configmap.Watcher, drs *dataresidency.Store) *controller.Impl {
 	var env envConfig
 	if err := envconfig.Process("", &env); err != nil {
 		logging.FromContext(ctx).Fatal("Failed to process env var", zap.Error(err))
@@ -90,12 +101,12 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 			client.Close()
 		}()
 	}
-
 	r := &Reconciler{
-		Base:         reconciler.NewBase(ctx, controllerAgentName, cmw),
-		brokerLister: brokerinformer.Get(ctx).Lister(),
-		pubsubClient: client,
-		projectID:    projectID,
+		Base:               reconciler.NewBase(ctx, controllerAgentName, cmw),
+		brokerLister:       brokerinformer.Get(ctx).Lister(),
+		pubsubClient:       client,
+		projectID:          projectID,
+		dataresidencyStore: drs,
 	}
 
 	impl := triggerreconciler.NewImpl(ctx, r, withAgentAndFinalizer)

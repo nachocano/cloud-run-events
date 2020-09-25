@@ -27,15 +27,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/google/knative-gcp/pkg/logging"
 	eventingduckv1beta1 "knative.dev/eventing/pkg/apis/duck/v1beta1"
 	"knative.dev/eventing/pkg/duck"
-	"knative.dev/eventing/pkg/logging"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 	pkgreconciler "knative.dev/pkg/reconciler"
 	"knative.dev/pkg/resolver"
 
 	"cloud.google.com/go/pubsub"
 	brokerv1beta1 "github.com/google/knative-gcp/pkg/apis/broker/v1beta1"
+	"github.com/google/knative-gcp/pkg/apis/configs/dataresidency"
 	triggerreconciler "github.com/google/knative-gcp/pkg/client/injection/reconciler/broker/v1beta1/trigger"
 	brokerlisters "github.com/google/knative-gcp/pkg/client/listers/broker/v1beta1"
 	metadataClient "github.com/google/knative-gcp/pkg/gclient/metadata"
@@ -81,6 +82,8 @@ type Reconciler struct {
 
 	// pubsubClient is used as the Pubsub client when present.
 	pubsubClient *pubsub.Client
+
+	dataresidencyStore *dataresidency.Store
 }
 
 // Check that TriggerReconciler implements Interface
@@ -160,7 +163,7 @@ func (r *Reconciler) resolveSubscriber(ctx context.Context, t *brokerv1beta1.Tri
 		t.Spec.Subscriber.Ref.Namespace = t.GetNamespace()
 	}
 
-	subscriberURI, err := r.uriResolver.URIFromDestinationV1(t.Spec.Subscriber, b)
+	subscriberURI, err := r.uriResolver.URIFromDestinationV1(ctx, t.Spec.Subscriber, b)
 	if err != nil {
 		logging.FromContext(ctx).Error("Unable to get the Subscriber's URI", zap.Error(err))
 		t.Status.MarkSubscriberResolvedFailed("Unable to get the Subscriber's URI", "%v", err)
@@ -223,6 +226,13 @@ func (r *Reconciler) reconcileRetryTopicAndSubscription(ctx context.Context, tri
 	// Check if topic exists, and if not, create it.
 	topicID := resources.GenerateRetryTopicName(trig)
 	topicConfig := &pubsub.TopicConfig{Labels: labels}
+	if r.dataresidencyStore != nil {
+		if dataresidencyConfig := r.dataresidencyStore.Load(); dataresidencyConfig != nil {
+			if dataresidencyConfig.DataResidencyDefaults.ComputeAllowedPersistenceRegions(topicConfig) {
+				logging.FromContext(ctx).Debug("Updated Topic Config AllowedPersistenceRegions for Trigger", zap.Any("topicConfig", *topicConfig))
+			}
+		}
+	}
 	topic, err := pubsubReconciler.ReconcileTopic(ctx, topicID, topicConfig, trig, &trig.Status)
 	if err != nil {
 		return err
@@ -333,7 +343,7 @@ func (r *Reconciler) checkDependencyAnnotation(ctx context.Context, t *brokerv1b
 			t.Status.MarkDependencyFailed("ReferenceError", "Unable to unmarshal objectReference from dependency annotation of trigger: %v", err)
 			return fmt.Errorf("getting object ref from dependency annotation %q: %v", dependencyAnnotation, err)
 		}
-		trackKResource := r.kresourceTracker.TrackInNamespace(t)
+		trackKResource := r.kresourceTracker.TrackInNamespace(ctx, t)
 		// Trigger and its dependent source are in the same namespace, we already did the validation in the webhook.
 		if err := trackKResource(dependencyObjRef); err != nil {
 			t.Status.MarkDependencyUnknown("TrackingError", "Unable to track dependency: %v", err)

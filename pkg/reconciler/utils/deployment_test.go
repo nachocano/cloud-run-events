@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -24,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgotesting "k8s.io/client-go/testing"
+	"knative.dev/pkg/ptr"
 	pkgreconcilertesting "knative.dev/pkg/reconciler/testing"
 )
 
@@ -40,6 +42,10 @@ var (
 	deploymentDifferentSpec = &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "testns", Name: "test"},
 		Spec:       appsv1.DeploymentSpec{MinReadySeconds: 20},
+	}
+	deploymentWithReplicas = &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "testns", Name: "test"},
+		Spec:       appsv1.DeploymentSpec{MinReadySeconds: 10, Replicas: ptr.Int32(3)},
 	}
 
 	deploymentCreateFailure = pkgreconcilertesting.InduceFailure("create", "deployments")
@@ -94,6 +100,14 @@ func TestDeploymentReconciler(t *testing.T) {
 			},
 			in: deployment,
 		},
+		{
+			commonCase: commonCase{
+				name:     "deployment exists with different replicas",
+				existing: []runtime.Object{deploymentWithReplicas},
+			},
+			in:   deployment,
+			want: deploymentWithReplicas,
+		},
 	}
 
 	for _, test := range tests {
@@ -105,7 +119,7 @@ func TestDeploymentReconciler(t *testing.T) {
 				Lister:     tr.listers.GetDeploymentLister(),
 				Recorder:   tr.recorder,
 			}
-			out, err := rec.ReconcileDeployment(obj, test.in)
+			out, err := rec.ReconcileDeployment(context.Background(), obj, test.in)
 
 			tr.verify(t, test.commonCase, err)
 

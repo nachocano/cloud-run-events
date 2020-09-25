@@ -17,6 +17,7 @@
 package helpers
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -34,14 +35,13 @@ import (
 // BrokerCreator creates a broker and returns its broker name.
 type BrokerCreatorWithRetries func(client *testlib.Client, numRetries int32) string
 
-func BrokerRedelivery(t *testing.T, creator BrokerCreatorWithRetries) {
+func BrokerRedelivery(ctx context.Context, t *testing.T, creator BrokerCreatorWithRetries) {
 
 	numRetries := int32(5)
 
 	t.Run(dropevents.Fibonacci, func(t *testing.T) {
-		brokerRedelivery(t, creator, numRetries, func(pod *corev1.Pod, client *testlib.Client) error {
-			container := pod.Spec.Containers[0]
-			container.Env = append(container.Env,
+		brokerRedelivery(ctx, t, creator, numRetries, func(pod *corev1.Pod, client *testlib.Client) error {
+			pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env,
 				corev1.EnvVar{
 					Name:  dropevents.SkipAlgorithmKey,
 					Value: dropevents.Fibonacci,
@@ -52,16 +52,15 @@ func BrokerRedelivery(t *testing.T, creator BrokerCreatorWithRetries) {
 	})
 
 	t.Run(dropevents.Sequence, func(t *testing.T) {
-		brokerRedelivery(t, creator, numRetries, func(pod *corev1.Pod, client *testlib.Client) error {
-			container := pod.Spec.Containers[0]
-			container.Env = append(container.Env,
+		brokerRedelivery(ctx, t, creator, numRetries, func(pod *corev1.Pod, client *testlib.Client) error {
+			pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env,
 				corev1.EnvVar{
 					Name:  dropevents.SkipAlgorithmKey,
 					Value: dropevents.Sequence,
 				},
 				corev1.EnvVar{
 					Name:  dropevents.NumberKey,
-					Value: fmt.Sprintf("%d", numRetries-1),
+					Value: fmt.Sprintf("%d", numRetries),
 				},
 			)
 			return nil
@@ -69,7 +68,7 @@ func BrokerRedelivery(t *testing.T, creator BrokerCreatorWithRetries) {
 	})
 }
 
-func brokerRedelivery(t *testing.T, creator BrokerCreatorWithRetries, numRetries int32, options ...recordevents.EventRecordOption) {
+func brokerRedelivery(ctx context.Context, t *testing.T, creator BrokerCreatorWithRetries, numRetries int32, options ...recordevents.EventRecordOption) {
 
 	const (
 		triggerName = "trigger"
@@ -86,6 +85,7 @@ func brokerRedelivery(t *testing.T, creator BrokerCreatorWithRetries, numRetries
 
 	// Create event tracker that should receive all events.
 	allEventTracker, _ := recordevents.StartEventRecordOrFail(
+		ctx,
 		client,
 		eventRecord,
 		options...,
@@ -100,7 +100,7 @@ func brokerRedelivery(t *testing.T, creator BrokerCreatorWithRetries, numRetries
 		resources.WithSubscriberServiceRefForTriggerV1(eventRecord),
 	)
 
-	client.WaitForAllTestResourcesReadyOrFail()
+	client.WaitForAllTestResourcesReadyOrFail(ctx)
 
 	// send CloudEvent to the broker
 
@@ -112,7 +112,7 @@ func brokerRedelivery(t *testing.T, creator BrokerCreatorWithRetries, numRetries
 		t.Fatalf("Cannot set the payload of the event: %s", err.Error())
 	}
 
-	client.SendEventToAddressable(senderName, brokerName, testlib.BrokerTypeMeta, eventToSend)
+	client.SendEventToAddressable(ctx, senderName, brokerName, testlib.BrokerTypeMeta, eventToSend)
 
 	allEventTracker.AssertAtLeast(1, recordevents.MatchEvent(AllOf(
 		HasSource(eventSource),

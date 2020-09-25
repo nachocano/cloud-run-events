@@ -28,17 +28,18 @@ import (
 	ceclient "github.com/cloudevents/sdk-go/v2/client"
 	"github.com/cloudevents/sdk-go/v2/protocol"
 	"github.com/cloudevents/sdk-go/v2/protocol/http"
+	"github.com/google/knative-gcp/pkg/logging"
 	"github.com/google/knative-gcp/pkg/metrics"
 	"github.com/google/knative-gcp/pkg/tracing"
 	"github.com/google/knative-gcp/pkg/utils/clients"
 	"github.com/google/wire"
 	"go.opencensus.io/trace"
 	"go.uber.org/zap"
+	"google.golang.org/api/support/bundler"
 	grpccode "google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/types"
 	"knative.dev/eventing/pkg/kncloudevents"
-	"knative.dev/eventing/pkg/logging"
 	kntracing "knative.dev/eventing/pkg/tracing"
 )
 
@@ -129,6 +130,7 @@ func (h *Handler) ServeHTTP(response nethttp.ResponseWriter, request *nethttp.Re
 	}
 
 	broker, err := ConvertPathToNamespacedName(request.URL.Path)
+	ctx = logging.With(ctx, zap.Stringer("broker", broker))
 	if err != nil {
 		logging.FromContext(ctx).Debug("Malformed request path", zap.String("path", request.URL.Path))
 		nethttp.Error(response, err.Error(), nethttp.StatusNotFound)
@@ -165,7 +167,7 @@ func (h *Handler) ServeHTTP(response nethttp.ResponseWriter, request *nethttp.Re
 	defer cancel()
 	defer func() { h.reportMetrics(request.Context(), broker, event, statusCode) }()
 	if res := h.decouple.Send(ctx, broker, *event); !cev2.IsACK(res) {
-		logging.FromContext(ctx).Error("Error publishing to PubSub", zap.String("broker", broker.String()), zap.Error(res))
+		logging.FromContext(ctx).Error("Error publishing to PubSub", zap.Error(res))
 		statusCode = nethttp.StatusInternalServerError
 
 		switch {
@@ -173,6 +175,8 @@ func (h *Handler) ServeHTTP(response nethttp.ResponseWriter, request *nethttp.Re
 			statusCode = nethttp.StatusNotFound
 		case errors.Is(res, ErrNotReady):
 			statusCode = nethttp.StatusServiceUnavailable
+		case errors.Is(res, bundler.ErrOverflow):
+			statusCode = nethttp.StatusTooManyRequests
 		case grpcstatus.Code(res) == grpccode.PermissionDenied:
 			nethttp.Error(response, deniedErrMsg, statusCode)
 			return
@@ -213,6 +217,6 @@ func (h *Handler) reportMetrics(ctx context.Context, broker types.NamespacedName
 		ResponseCode: statusCode,
 	}
 	if err := h.reporter.ReportEventCount(ctx, args); err != nil {
-		logging.FromContext(ctx).Warn("Failed to record metrics.", zap.Any("namespace", broker.Namespace), zap.Any("broker", broker.Name), zap.Error(err))
+		logging.FromContext(ctx).Warn("Failed to record metrics.", zap.Any("broker", broker.Name), zap.Error(err))
 	}
 }

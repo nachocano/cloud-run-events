@@ -30,6 +30,7 @@ import (
 	brokercellinformer "github.com/google/knative-gcp/pkg/client/injection/informers/intevents/v1alpha1/brokercell"
 	hpainformer "github.com/google/knative-gcp/pkg/client/injection/kube/informers/autoscaling/v2beta2/horizontalpodautoscaler"
 	v1alpha1brokercell "github.com/google/knative-gcp/pkg/client/injection/reconciler/intevents/v1alpha1/brokercell"
+	"github.com/google/knative-gcp/pkg/logging"
 	"github.com/google/knative-gcp/pkg/metrics"
 	"github.com/google/knative-gcp/pkg/reconciler"
 	brokerresources "github.com/google/knative-gcp/pkg/reconciler/broker/resources"
@@ -38,7 +39,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
-	"knative.dev/eventing/pkg/logging"
 	deploymentinformer "knative.dev/pkg/client/injection/kube/informers/apps/v1/deployment"
 	configmapinformer "knative.dev/pkg/client/injection/kube/informers/core/v1/configmap"
 	endpointsinformer "knative.dev/pkg/client/injection/kube/informers/core/v1/endpoints"
@@ -46,6 +46,7 @@ import (
 	serviceinformer "knative.dev/pkg/client/injection/kube/informers/core/v1/service"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
+	"knative.dev/pkg/injection"
 	"knative.dev/pkg/system"
 )
 
@@ -54,6 +55,15 @@ const (
 	// itself when creating events.
 	controllerAgentName = "brokercell-controller"
 )
+
+type Constructor injection.ControllerConstructor
+
+// NewConstructor creates a constructor to make a BrokerCell controller.
+func NewConstructor() Constructor {
+	return func(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
+		return NewController(ctx, cmw)
+	}
+}
 
 // NewController creates a Reconciler for BrokerCell and returns the result of NewImpl.
 func NewController(
