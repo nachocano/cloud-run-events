@@ -18,7 +18,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-source $(dirname "$0")/../vendor/knative.dev/test-infra/scripts/library.sh
+source $(dirname "$0")/../vendor/knative.dev/hack/library.sh
 
 # Compute _example hash for all configmaps.
 for file in "${REPO_ROOT_DIR}"/config/core/configmaps/*.yaml
@@ -61,14 +61,14 @@ chmod +x "${CODEGEN_PKG}"/generate-groups.sh
 #                  instead of the $GOPATH directly. For normal projects this can be dropped.
 "${CODEGEN_PKG}"/generate-groups.sh "deepcopy,client,informer,lister" \
   github.com/google/knative-gcp/pkg/client github.com/google/knative-gcp/pkg/apis \
-  "messaging:v1alpha1 messaging:v1beta1 events:v1alpha1 events:v1beta1 events:v1 broker:v1beta1 intevents:v1alpha1 intevents:v1beta1 intevents:v1" \
+  "messaging:v1beta1 events:v1beta1 events:v1 broker:v1beta1 intevents:v1alpha1 intevents:v1beta1 intevents:v1" \
   --go-header-file "${REPO_ROOT_DIR}"/hack/boilerplate/boilerplate.go.txt
 
 # Knative Injection
 chmod +x "${KNATIVE_CODEGEN_PKG}"/hack/generate-knative.sh
 "${KNATIVE_CODEGEN_PKG}"/hack/generate-knative.sh "injection" \
   github.com/google/knative-gcp/pkg/client github.com/google/knative-gcp/pkg/apis \
-  "messaging:v1alpha1 messaging:v1beta1 events:v1alpha1 events:v1beta1 events:v1 duck:v1alpha1 duck:v1beta1 duck:v1 broker:v1beta1 intevents:v1alpha1 intevents:v1beta1 intevents:v1" \
+  "messaging:v1beta1 events:v1beta1 events:v1 duck:v1alpha1 duck:v1beta1 duck:v1 broker:v1beta1 intevents:v1alpha1 intevents:v1beta1 intevents:v1" \
   --go-header-file "${REPO_ROOT_DIR}"/hack/boilerplate/boilerplate.go.txt
 
 # Deep copy configs.
@@ -76,7 +76,7 @@ ${GOPATH}/bin/deepcopy-gen \
   -O zz_generated.deepcopy \
   --go-header-file ${REPO_ROOT_DIR}/hack/boilerplate/boilerplate.go.txt \
   -i github.com/google/knative-gcp/pkg/apis/configs/gcpauth \
-  -i github.com/google/knative-gcp/pkg/apis/configs/broker \
+  -i github.com/google/knative-gcp/pkg/apis/configs/brokerdelivery \
   -i github.com/google/knative-gcp/pkg/apis/configs/dataresidency \
 
 # TODO(yolocs): generate autoscaling v2beta2 in knative/pkg.

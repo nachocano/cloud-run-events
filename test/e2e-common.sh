@@ -25,7 +25,7 @@ readonly CONTROL_PLANE_SERVICE_ACCOUNT_NON_PROW="cloud-run-events"
 # Constants used for creating ServiceAccount for Data Plane(Pub/Sub Admin) if it's not running on Prow.
 readonly PUBSUB_SERVICE_ACCOUNT_NON_PROW="cre-pubsub"
 
-# Vendored eventing test iamges.
+# Vendored eventing test images.
 readonly VENDOR_EVENTING_TEST_IMAGES="vendor/knative.dev/eventing/test/test_images/"
 
 # Constants used for authentication setup for GCP Broker if it's not running on Prow.
@@ -78,12 +78,16 @@ function delete_topics_and_subscriptions() {
     subs=$(gcloud pubsub subscriptions list --format="value(name)")
     while read -r sub_name
     do
-      gcloud pubsub subscriptions delete "${sub_name}"
+      if [[ -n "${sub_name}" ]]; then
+        gcloud pubsub subscriptions delete "${sub_name}"
+      fi
     done <<<"$subs"
     topics=$(gcloud pubsub topics list --format="value(name)")
     while read -r topic_name
     do
-      gcloud pubsub topics delete "${topic_name}"
+      if [[ -n "${topic_name}" ]]; then
+        gcloud pubsub topics delete "${topic_name}"
+      fi
     done <<<"$topics"
 }
 
@@ -143,4 +147,27 @@ function dump_extra_cluster_state() {
       echo "============================================================"
     done
   done
+}
+
+function wait_for_file() {
+  local file timeout waits
+  file="$1"
+  waits=300
+  timeout=$waits
+
+  echo "Waiting for existence of file: ${file}"
+
+  while [ ! -f "${file}" ]; do
+    # When the timeout is equal to zero, show an error and leave the loop.
+    if [ "${timeout}" == 0 ]; then
+      echo "ERROR: Timeout (${waits}s) while waiting for the file ${file}."
+      return 1
+    fi
+
+    sleep 1
+
+    # Decrease the timeout of one
+    ((timeout--))
+  done
+  return 0
 }

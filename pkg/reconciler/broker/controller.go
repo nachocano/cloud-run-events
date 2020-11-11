@@ -18,8 +18,8 @@ package broker
 
 import (
 	"context"
-	"os"
 
+	"github.com/google/knative-gcp/pkg/apis/configs/brokerdelivery"
 	"github.com/google/knative-gcp/pkg/apis/configs/dataresidency"
 
 	"cloud.google.com/go/pubsub"
@@ -39,7 +39,6 @@ import (
 	brokerinformer "github.com/google/knative-gcp/pkg/client/injection/informers/broker/v1beta1/broker"
 	brokercellinformer "github.com/google/knative-gcp/pkg/client/injection/informers/intevents/v1alpha1/brokercell"
 	brokerreconciler "github.com/google/knative-gcp/pkg/client/injection/reconciler/broker/v1beta1/broker"
-	metadataClient "github.com/google/knative-gcp/pkg/gclient/metadata"
 	"github.com/google/knative-gcp/pkg/reconciler"
 	"github.com/google/knative-gcp/pkg/utils"
 )
@@ -53,28 +52,30 @@ const (
 type Constructor injection.ControllerConstructor
 
 // NewConstructor creates a constructor to make a Broker controller.
-func NewConstructor(dataresidencyss *dataresidency.StoreSingleton) Constructor {
+func NewConstructor(brokerdeliveryss *brokerdelivery.StoreSingleton, dataresidencyss *dataresidency.StoreSingleton) Constructor {
 	return func(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
-		return newController(ctx, cmw, dataresidencyss.Store(ctx, cmw))
+		return newController(ctx, cmw, brokerdeliveryss.Store(ctx, cmw), dataresidencyss.Store(ctx, cmw))
 	}
 }
 
-func newController(ctx context.Context, cmw configmap.Watcher, drs *dataresidency.Store) *controller.Impl {
+func newController(ctx context.Context, cmw configmap.Watcher, brds *brokerdelivery.Store, drs *dataresidency.Store) *controller.Impl {
 	brokerInformer := brokerinformer.Get(ctx)
 	bcInformer := brokercellinformer.Get(ctx)
 
+	var client *pubsub.Client
 	// If there is an error, the projectID will be empty. The reconciler will retry
 	// to get the projectID during reconciliation.
-	projectID, err := utils.ProjectID(os.Getenv(utils.ProjectIDEnvKey), metadataClient.NewDefaultMetadataClient())
+	projectID, err := utils.ProjectIDOrDefault("")
 	if err != nil {
 		logging.FromContext(ctx).Error("Failed to get project ID", zap.Error(err))
-	}
-	// Attempt to create a pubsub client for all worker threads to use. If this
-	// fails, pass a nil value to the Reconciler. They will attempt to
-	// create a client on reconcile.
-	client, err := newPubsubClient(ctx, projectID)
-	if err != nil {
-		logging.FromContext(ctx).Error("Failed to create controller-wide Pub/Sub client", zap.Error(err))
+	} else {
+		// Attempt to create a pubsub client for all worker threads to use. If this
+		// fails, pass a nil value to the Reconciler. They will attempt to
+		// create a client on reconcile.
+		if client, err = pubsub.NewClient(ctx, projectID); err != nil {
+			client = nil
+			logging.FromContext(ctx).Error("Failed to create controller-wide Pub/Sub client", zap.Error(err))
+		}
 	}
 
 	if client != nil {
@@ -91,7 +92,12 @@ func newController(ctx context.Context, cmw configmap.Watcher, drs *dataresidenc
 		dataresidencyStore: drs,
 	}
 
-	impl := brokerreconciler.NewImpl(ctx, r, brokerv1beta1.BrokerClass)
+	impl := brokerreconciler.NewImpl(ctx, r, brokerv1beta1.BrokerClass,
+		func(impl *controller.Impl) controller.Options {
+			return controller.Options{
+				ConfigStore: brds,
+			}
+		})
 
 	r.Logger.Info("Setting up event handlers")
 
@@ -123,17 +129,4 @@ func newController(ctx context.Context, cmw configmap.Watcher, drs *dataresidenc
 	))
 
 	return impl
-}
-
-func newPubsubClient(ctx context.Context, projectID string) (*pubsub.Client, error) {
-	projectID, err := utils.ProjectID(projectID, metadataClient.NewDefaultMetadataClient())
-	if err != nil {
-		return nil, err
-	}
-
-	client, err := pubsub.NewClient(ctx, projectID)
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
 }

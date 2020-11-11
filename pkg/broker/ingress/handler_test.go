@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"math/rand"
+
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/pubsub/pstest"
 	cepubsub "github.com/cloudevents/sdk-go/protocol/pubsub/v2"
@@ -52,6 +54,7 @@ import (
 	logtest "knative.dev/pkg/logging/testing"
 	"knative.dev/pkg/metrics/metricskey"
 	"knative.dev/pkg/metrics/metricstest"
+	"knative.dev/pkg/ptr"
 
 	_ "knative.dev/pkg/metrics/testing"
 )
@@ -68,6 +71,9 @@ const (
 	container = "testcontainer"
 )
 
+// Add a target to every broker to ensure events are sent to pub/sub.
+var brokerTargets = map[string]*config.Target{"target": {}}
+
 var brokerConfig = &config.TargetsConfig{
 	Brokers: map[string]*config.Broker{
 		"ns1/broker1": {
@@ -75,24 +81,28 @@ var brokerConfig = &config.TargetsConfig{
 			Name:          "broker1",
 			Namespace:     "ns1",
 			DecoupleQueue: &config.Queue{Topic: topicID, State: config.State_READY},
+			Targets:       brokerTargets,
 		},
 		"ns2/broker2": {
 			Id:            "b-uid-2",
 			Name:          "broker2",
 			Namespace:     "ns2",
 			DecoupleQueue: nil,
+			Targets:       brokerTargets,
 		},
 		"ns3/broker3": {
 			Id:            "b-uid-3",
 			Name:          "broker3",
 			Namespace:     "ns3",
 			DecoupleQueue: &config.Queue{Topic: ""},
+			Targets:       brokerTargets,
 		},
 		"ns4/broker4": {
 			Id:            "b-uid-4",
 			Name:          "broker4",
 			Namespace:     "ns4",
 			DecoupleQueue: &config.Queue{Topic: "topic4", State: config.State_UNKNOWN},
+			Targets:       brokerTargets,
 		},
 	},
 }
@@ -115,11 +125,13 @@ type testCase struct {
 	// additional assertions on the output event.
 	eventAssertions []eventAssertion
 	decouple        DecoupleSink
+	contentLength   *int64
+	timeout         time.Duration
 }
 
 type fakeOverloadedDecoupleSink struct{}
 
-func (m *fakeOverloadedDecoupleSink) Send(ctx context.Context, broker types.NamespacedName, event cev2.Event) protocol.Result {
+func (m *fakeOverloadedDecoupleSink) Send(_ context.Context, _ types.NamespacedName, _ cev2.Event) protocol.Result {
 	return bundler.ErrOverflow
 }
 
@@ -172,16 +184,48 @@ func TestHandler(t *testing.T) {
 			wantCode: nethttp.StatusMethodNotAllowed,
 		},
 		{
+			name:     "an event with a very large payload",
+			method:   "POST",
+			path:     "/ns1/broker1",
+			event:    createTestEventWithPayloadSize("test-event", 11000000), // 11Mb
+			wantCode: nethttp.StatusRequestEntityTooLarge,
+		},
+		{
+			name:           "malicious requests or requests with unknown Content-Length and a very large payload",
+			method:         "POST",
+			path:           "/ns1/broker1",
+			event:          createTestEventWithPayloadSize("test-event", 11000000), // 11Mb
+			contentLength:  ptr.Int64(-1),
+			wantCode:       nethttp.StatusRequestEntityTooLarge,
+			timeout:        10 * time.Second,
+			wantEventCount: 1,
+			wantMetricTags: map[string]string{
+				metricskey.LabelEventType:         "_invalid_cloud_event_",
+				metricskey.LabelResponseCode:      "413",
+				metricskey.LabelResponseCodeClass: "4xx",
+				metricskey.PodName:                pod,
+				metricskey.ContainerName:          container,
+			},
+		},
+		{
 			name:     "malformed path",
 			path:     "/ns1/broker1/and/something/else",
 			event:    createTestEvent("test-event"),
 			wantCode: nethttp.StatusNotFound,
 		},
 		{
-			name:     "request is not an event",
-			path:     "/ns1/broker1",
-			wantCode: nethttp.StatusBadRequest,
-			header:   nethttp.Header{},
+			name:           "request is not an event",
+			path:           "/ns1/broker1",
+			wantCode:       nethttp.StatusBadRequest,
+			header:         nethttp.Header{},
+			wantEventCount: 1,
+			wantMetricTags: map[string]string{
+				metricskey.LabelEventType:         "_invalid_cloud_event_",
+				metricskey.LabelResponseCode:      "400",
+				metricskey.LabelResponseCodeClass: "4xx",
+				metricskey.PodName:                pod,
+				metricskey.ContainerName:          container,
+			},
 		},
 		{
 			name:           "wrong path - broker doesn't exist in given namespace",
@@ -276,11 +320,15 @@ func TestHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			reportertest.ResetIngressMetrics()
 			ctx := logging.WithLogger(context.Background(), logtest.TestLogger(t))
-			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			timeout := 5 * time.Second
+			if tc.timeout > 0 {
+				timeout = tc.timeout
+			}
+			ctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 
 			psSrv := pstest.NewServer()
-			defer psSrv.Close()
+			t.Cleanup(func() { psSrv.Close() })
 
 			decouple := tc.decouple
 			if decouple == nil {
@@ -289,8 +337,11 @@ func TestHandler(t *testing.T) {
 
 			url := createAndStartIngress(ctx, t, psSrv, decouple)
 			rec := setupTestReceiver(ctx, t, psSrv)
-
-			res, err := client.Do(createRequest(tc, url))
+			req := createRequest(tc, url)
+			if tc.contentLength != nil {
+				req.ContentLength = *tc.contentLength
+			}
+			res, err := client.Do(req)
 			if err != nil {
 				t.Fatalf("Unexpected error from http client: %v", err)
 			}
@@ -307,6 +358,7 @@ func TestHandler(t *testing.T) {
 				}
 				savedToSink, err := binding.ToEvent(ctx, m)
 				if err != nil {
+					m.Finish(err)
 					t.Fatal(err)
 				}
 				// Retrieve the event from the decouple sink.
@@ -319,6 +371,7 @@ func TestHandler(t *testing.T) {
 				for _, assertion := range tc.eventAssertions {
 					assertion(t, savedToSink)
 				}
+				m.Finish(nil)
 			}
 
 			select {
@@ -331,14 +384,16 @@ func TestHandler(t *testing.T) {
 }
 
 func BenchmarkIngressHandler(b *testing.B) {
-	for _, eventSize := range kgcptesting.BenchmarkEventSizes {
-		b.Run(fmt.Sprintf("%d bytes", eventSize), func(b *testing.B) {
-			runIngressHandlerBenchmark(b, eventSize)
-		})
+	for _, targetCounts := range []int{1, 5, 10, 50, 100} {
+		for _, eventSize := range kgcptesting.BenchmarkEventSizes {
+			b.Run(fmt.Sprintf("event size %d bytes - %d targets", eventSize, targetCounts), func(b *testing.B) {
+				runIngressHandlerBenchmark(b, eventSize, targetCounts)
+			})
+		}
 	}
 }
 
-func runIngressHandlerBenchmark(b *testing.B, eventSize int) {
+func runIngressHandlerBenchmark(b *testing.B, eventSize int, targetCounts int) {
 	reportertest.ResetIngressMetrics()
 
 	ctx := logging.WithLogger(context.Background(),
@@ -351,6 +406,10 @@ func runIngressHandlerBenchmark(b *testing.B, eventSize int) {
 	defer psSrv.Close()
 
 	psClient := createPubsubClient(ctx, b, psSrv)
+
+	setBrokerConfigTargets(targetCounts)
+	defer restoreBrokerConfigTargets()
+
 	decouple := NewMultiTopicDecoupleSink(ctx, memory.NewTargets(brokerConfig), psClient, pubsub.DefaultPublishSettings)
 	statsReporter, err := metrics.NewIngressReporter(metrics.PodName(pod), metrics.ContainerName(container))
 	if err != nil {
@@ -379,6 +438,37 @@ func runIngressHandlerBenchmark(b *testing.B, eventSize int) {
 			}
 		}
 	})
+}
+
+// setBrokerConfigTargets updates 'brokerConfig' targets such that each broker has
+// 'targetCounts' number of targets, where the first N - 1 targets have non-matching
+// filters, and the N-th one has an all pass filter (i.e., it has interest in every event).
+// In go iterating over a map is randomized, so on average this represents the worst case
+// scenario for ingress filtering.
+func setBrokerConfigTargets(targetCounts int) {
+	var targets = make(map[string]*config.Target)
+
+	for i := 0; i < targetCounts-1; i++ {
+		key := fmt.Sprintf("non_matching_target_%d", i)
+		targets[key] = &config.Target{
+			FilterAttributes: map[string]string{
+				"type":   eventType,
+				"source": "some-non-matching-test-source",
+			},
+		}
+	}
+
+	targets["matching_target"] = &config.Target{}
+
+	for _, cfg := range brokerConfig.Brokers {
+		cfg.Targets = targets
+	}
+}
+
+func restoreBrokerConfigTargets() {
+	for _, cfg := range brokerConfig.Brokers {
+		cfg.Targets = brokerTargets
+	}
 }
 
 func createPubsubClient(ctx context.Context, t testing.TB, psSrv *pstest.Server) *pubsub.Client {
@@ -416,7 +506,13 @@ func setupTestReceiver(ctx context.Context, t testing.TB, psSrv *pstest.Server) 
 		t.Fatal(err)
 	}
 
-	go p.OpenInbound(cecontext.WithLogger(ctx, logtest.TestLogger(t)))
+	errChan := make(chan error)
+	go func() {
+		errChan <- p.OpenInbound(cecontext.WithLogger(ctx, logtest.TestLogger(t)))
+	}()
+	t.Cleanup(func() {
+		<-errChan
+	})
 	return p
 }
 
@@ -448,6 +544,14 @@ func createTestEvent(id string) *cloudevents.Event {
 	event.SetSource("test-source")
 	event.SetType(eventType)
 	return &event
+}
+
+func createTestEventWithPayloadSize(id string, payloadSizeBytes int) *cloudevents.Event {
+	testEvent := createTestEvent(id)
+	payload := make([]byte, payloadSizeBytes)
+	rand.Read(payload)
+	testEvent.SetData("application/octet-stream", payload)
+	return testEvent
 }
 
 // createRequest creates an http request from the test case. If event is specified, it converts the event to a request.

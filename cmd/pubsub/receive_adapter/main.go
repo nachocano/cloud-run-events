@@ -21,13 +21,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/knative-gcp/pkg/testing/testloggingutil"
+
 	"go.uber.org/zap"
-	"knative.dev/eventing/pkg/tracing"
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/metrics"
 	"knative.dev/pkg/signals"
+	"knative.dev/pkg/tracing"
 
-	metadataClient "github.com/google/knative-gcp/pkg/gclient/metadata"
 	. "github.com/google/knative-gcp/pkg/pubsub/adapter"
 	"github.com/google/knative-gcp/pkg/pubsub/adapter/converters"
 	tracingconfig "github.com/google/knative-gcp/pkg/tracing"
@@ -47,9 +48,6 @@ const (
 // TODO we should refactor this and reduce the number of environment variables.
 //  most of them are due to metrics, which has to change anyways.
 type envConfig struct {
-	// Environment variable containing project id.
-	Project string `envconfig:"PROJECT_ID"`
-
 	// Environment variable containing the sink URI.
 	Sink string `envconfig:"SINK_URI" required:"true"`
 
@@ -117,7 +115,7 @@ func main() {
 	}
 
 	// Convert json logging.Config to logging.Config.
-	loggingConfig, err := logging.JsonToLoggingConfig(env.LoggingConfigJson)
+	loggingConfig, err := logging.JSONToConfig(env.LoggingConfigJson)
 	if err != nil {
 		fmt.Printf("Failed to process logging config: %s", err.Error())
 		// Use default logging config.
@@ -132,8 +130,12 @@ func main() {
 	defer flush(logger)
 	ctx := logging.WithLogger(signals.NewContext(), logger.Sugar())
 
+	// This is added purely for the TestCloudLogging E2E tests, which verify that the log line is
+	// written based on environment variables.
+	testloggingutil.LogBasedOnEnv(logger)
+
 	// Convert json metrics.ExporterOptions to metrics.ExporterOptions.
-	metricsConfig, err := metrics.JsonToMetricsOptions(env.MetricsConfigJson)
+	metricsConfig, err := metrics.JSONToOptions(env.MetricsConfigJson)
 	if err != nil {
 		logger.Error("Failed to process metrics options", zap.Error(err))
 	}
@@ -152,7 +154,7 @@ func main() {
 		logger.Error("Failed to setup tracing", zap.Error(err), zap.Any("tracingConfig", tracingConfig))
 	}
 
-	projectID, err := utils.ProjectID(env.Project, metadataClient.NewDefaultMetadataClient())
+	projectID, err := utils.ProjectIDOrDefault("")
 	if err != nil {
 		logger.Fatal("Failed to retrieve project id", zap.Error(err))
 	}

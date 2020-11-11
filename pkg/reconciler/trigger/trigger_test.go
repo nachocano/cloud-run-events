@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/pubsub/pstest"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -35,7 +36,7 @@ import (
 	"knative.dev/pkg/apis"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 	"knative.dev/pkg/client/injection/ducks/duck/v1/addressable"
-	"knative.dev/pkg/client/injection/ducks/duck/v1/conditions"
+	"knative.dev/pkg/client/injection/ducks/duck/v1/source"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	. "knative.dev/pkg/reconciler/testing"
@@ -71,16 +72,17 @@ var (
 
 	testKey = fmt.Sprintf("%s/%s", testNS, triggerName)
 
-	triggerFinalizerUpdatedEvent = Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "test-trigger" finalizers`)
-	triggerReconciledEvent       = Eventf(corev1.EventTypeNormal, "TriggerReconciled", `Trigger reconciled: "testnamespace/test-trigger"`)
-	triggerFinalizedEvent        = Eventf(corev1.EventTypeNormal, "TriggerFinalized", `Trigger finalized: "testnamespace/test-trigger"`)
-	topicCreatedEvent            = Eventf(corev1.EventTypeNormal, "TopicCreated", `Created PubSub topic "cre-tgr_testnamespace_test-trigger_abc123"`)
-	topicDeletedEvent            = Eventf(corev1.EventTypeNormal, "TopicDeleted", `Deleted PubSub topic "cre-tgr_testnamespace_test-trigger_abc123"`)
-	deadLetterTopicCreatedEvent  = Eventf(corev1.EventTypeNormal, "TopicCreated", `Created PubSub topic "test-dead-letter-topic-id"`)
-	subscriptionCreatedEvent     = Eventf(corev1.EventTypeNormal, "SubscriptionCreated", `Created PubSub subscription "cre-tgr_testnamespace_test-trigger_abc123"`)
-	subscriptionDeletedEvent     = Eventf(corev1.EventTypeNormal, "SubscriptionDeleted", `Deleted PubSub subscription "cre-tgr_testnamespace_test-trigger_abc123"`)
-	subscriberAPIVersion         = fmt.Sprintf("%s/%s", subscriberGroup, subscriberVersion)
-	subscriberGVK                = metav1.GroupVersionKind{
+	triggerFinalizerUpdatedEvent   = Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "test-trigger" finalizers`)
+	triggerReconciledEvent         = Eventf(corev1.EventTypeNormal, "TriggerReconciled", `Trigger reconciled: "testnamespace/test-trigger"`)
+	triggerFinalizedEvent          = Eventf(corev1.EventTypeNormal, "TriggerFinalized", `Trigger finalized: "testnamespace/test-trigger"`)
+	topicCreatedEvent              = Eventf(corev1.EventTypeNormal, "TopicCreated", `Created PubSub topic "cre-tgr_testnamespace_test-trigger_abc123"`)
+	topicDeletedEvent              = Eventf(corev1.EventTypeNormal, "TopicDeleted", `Deleted PubSub topic "cre-tgr_testnamespace_test-trigger_abc123"`)
+	deadLetterTopicCreatedEvent    = Eventf(corev1.EventTypeNormal, "TopicCreated", `Created PubSub topic "test-dead-letter-topic-id"`)
+	subscriptionCreatedEvent       = Eventf(corev1.EventTypeNormal, "SubscriptionCreated", `Created PubSub subscription "cre-tgr_testnamespace_test-trigger_abc123"`)
+	subscriptionDeletedEvent       = Eventf(corev1.EventTypeNormal, "SubscriptionDeleted", `Deleted PubSub subscription "cre-tgr_testnamespace_test-trigger_abc123"`)
+	subscriptionConfigUpdatedEvent = Eventf(corev1.EventTypeNormal, "SubscriptionConfigUpdated", `Updated config for PubSub subscription "cre-tgr_testnamespace_test-trigger_abc123"`)
+	subscriberAPIVersion           = fmt.Sprintf("%s/%s", subscriberGroup, subscriberVersion)
+	subscriberGVK                  = metav1.GroupVersionKind{
 		Group:   subscriberGroup,
 		Version: subscriberVersion,
 		Kind:    subscriberKind,
@@ -129,6 +131,11 @@ func TestAllCasesTrigger(t *testing.T) {
 			WantPatches: []clientgotesting.PatchActionImpl{
 				patchRemoveFinalizers(testNS, triggerName),
 			},
+			OtherTestData: map[string]interface{}{},
+			PostConditions: []func(*testing.T, *TableRow){
+				NoTopicsExist(),
+				NoSubscriptionsExist(),
+			},
 		},
 		{
 			// The finalization logic should be skipped since there is no finalizer string.
@@ -163,6 +170,10 @@ func TestAllCasesTrigger(t *testing.T) {
 				"pre": []PubsubAction{
 					TopicAndSub("cre-tgr_testnamespace_test-trigger_abc123", "cre-tgr_testnamespace_test-trigger_abc123"),
 				},
+			},
+			PostConditions: []func(*testing.T, *TableRow){
+				NoTopicsExist(),
+				NoSubscriptionsExist(),
 			},
 		},
 		{
@@ -238,6 +249,18 @@ func TestAllCasesTrigger(t *testing.T) {
 					TopicAndSub("cre-tgr_testnamespace_test-trigger_abc123", "cre-tgr_testnamespace_test-trigger_abc123"),
 				},
 			},
+			// This WantStatusUpdates should be deleted once the following TODO is finished.
+			// TODO(https://github.com/knative/pkg/issues/1149) Add a FilterKind to genreconciler so it will
+			// skip a trigger if it's not pointed to a gcp broker and doesn't have googlecloud finalizer string.
+			WantStatusUpdates: []clientgotesting.UpdateActionImpl{{
+				Object: NewTrigger(triggerName, testNS, brokerName,
+					WithTriggerUID(testUID),
+					WithTriggerFinalizers(finalizerName),
+					WithTriggerSetDefaults,
+					WithInitTriggerConditions,
+					WithTriggerTopicReady,
+				),
+			}},
 		},
 		{
 			Name: "Broker is not ready",
@@ -386,6 +409,65 @@ func TestAllCasesTrigger(t *testing.T) {
 			},
 		},
 		{
+			Name: "Sub already exists, update config",
+			Key:  testKey,
+			Objects: []runtime.Object{
+				NewBroker(brokerName, testNS,
+					WithBrokerClass(brokerv1beta1.BrokerClass),
+					WithInitBrokerConditions,
+					WithBrokerReady("url"),
+					WithBrokerDeliverySpec(brokerDeliverySpec),
+					WithBrokerSetDefaults,
+				),
+				makeSubscriberAddressableAsUnstructured(),
+				NewTrigger(triggerName, testNS, brokerName,
+					WithTriggerUID(testUID),
+					WithTriggerSubscriberRef(subscriberGVK, subscriberName, testNS),
+					WithTriggerSetDefaults),
+			},
+			WantStatusUpdates: []clientgotesting.UpdateActionImpl{{
+				Object: NewTrigger(triggerName, testNS, brokerName,
+					WithTriggerUID(testUID),
+					WithTriggerSubscriberRef(subscriberGVK, subscriberName, testNS),
+					WithTriggerBrokerReady,
+					WithTriggerSubscriptionReady,
+					WithTriggerTopicReady,
+					WithTriggerDependencyReady,
+					WithTriggerSubscriberResolvedSucceeded,
+					WithTriggerStatusSubscriberURI(subscriberURI),
+					WithTriggerSetDefaults,
+				),
+			}},
+			WantEvents: []string{
+				triggerFinalizerUpdatedEvent,
+				subscriptionConfigUpdatedEvent,
+				triggerReconciledEvent,
+			},
+			WantPatches: []clientgotesting.PatchActionImpl{
+				patchFinalizers(testNS, triggerName, finalizerName),
+			},
+			OtherTestData: map[string]interface{}{
+				"pre": []PubsubAction{
+					TopicAndSub("cre-tgr_testnamespace_test-trigger_abc123", "cre-tgr_testnamespace_test-trigger_abc123"),
+					Topic("test-dead-letter-topic-id"),
+				},
+			},
+			PostConditions: []func(*testing.T, *TableRow){
+				OnlyTopics("cre-tgr_testnamespace_test-trigger_abc123", "test-dead-letter-topic-id"),
+				OnlySubscriptions("cre-tgr_testnamespace_test-trigger_abc123"),
+				SubscriptionHasRetryPolicy("cre-tgr_testnamespace_test-trigger_abc123",
+					&pubsub.RetryPolicy{
+						MaximumBackoff: 5 * time.Second,
+						MinimumBackoff: 5 * time.Second,
+					}),
+				SubscriptionHasDeadLetterPolicy("cre-tgr_testnamespace_test-trigger_abc123",
+					&pubsub.DeadLetterPolicy{
+						MaxDeliveryAttempts: 3,
+						DeadLetterTopic:     "projects/test-project-id/topics/test-dead-letter-topic-id",
+					}),
+			},
+		},
+		{
 			Name: "Check topic config and labels",
 			Key:  testKey,
 			Objects: []runtime.Object{
@@ -453,11 +535,131 @@ func TestAllCasesTrigger(t *testing.T) {
 				}),
 			},
 		},
+		{
+			Name: "Trigger created, broker ready, subscriber is addressable, nil pubsub client",
+			Key:  testKey,
+			Objects: []runtime.Object{
+				NewBroker(brokerName, testNS,
+					WithBrokerClass(brokerv1beta1.BrokerClass),
+					WithInitBrokerConditions,
+					WithBrokerReady("url"),
+					WithBrokerDeliverySpec(brokerDeliverySpec),
+					WithBrokerSetDefaults,
+				),
+				makeSubscriberAddressableAsUnstructured(),
+				NewTrigger(triggerName, testNS, brokerName,
+					WithTriggerUID(testUID),
+					WithTriggerSubscriberRef(subscriberGVK, subscriberName, testNS),
+					WithTriggerSetDefaults),
+			},
+			WantStatusUpdates: []clientgotesting.UpdateActionImpl{{
+				Object: NewTrigger(triggerName, testNS, brokerName,
+					WithTriggerUID(testUID),
+					WithTriggerSubscriberRef(subscriberGVK, subscriberName, testNS),
+					WithTriggerBrokerReady,
+					WithTriggerSubscriptionReady,
+					WithTriggerTopicReady,
+					WithTriggerDependencyReady,
+					WithTriggerSubscriberResolvedSucceeded,
+					WithTriggerStatusSubscriberURI(subscriberURI),
+					WithTriggerSetDefaults,
+				),
+			}},
+			WantEvents: []string{
+				triggerFinalizerUpdatedEvent,
+				topicCreatedEvent,
+				subscriptionCreatedEvent,
+				triggerReconciledEvent,
+			},
+			WantPatches: []clientgotesting.PatchActionImpl{
+				patchFinalizers(testNS, triggerName, finalizerName),
+			},
+			OtherTestData: map[string]interface{}{
+				"pre": []PubsubAction{
+					Topic("test-dead-letter-topic-id"),
+				},
+				// TODO: This should make sure the function is called only once, but currently this case only check the create function
+				// will be called on demand since there is no test that reconcile twice or with both reconcile and delete.
+				"maxPSClientCreateTime": 1,
+			},
+			PostConditions: []func(*testing.T, *TableRow){
+				OnlyTopics("cre-tgr_testnamespace_test-trigger_abc123", "test-dead-letter-topic-id"),
+				OnlySubscriptions("cre-tgr_testnamespace_test-trigger_abc123"),
+				SubscriptionHasRetryPolicy("cre-tgr_testnamespace_test-trigger_abc123",
+					&pubsub.RetryPolicy{
+						MaximumBackoff: 5 * time.Second,
+						MinimumBackoff: 5 * time.Second,
+					}),
+				SubscriptionHasDeadLetterPolicy("cre-tgr_testnamespace_test-trigger_abc123",
+					&pubsub.DeadLetterPolicy{
+						MaxDeliveryAttempts: 3,
+						DeadLetterTopic:     "projects/test-project-id/topics/test-dead-letter-topic-id",
+					}),
+				TopicExistsWithConfig("cre-tgr_testnamespace_test-trigger_abc123", &pubsub.TopicConfig{
+					Labels: map[string]string{
+						"name": "test-trigger", "namespace": "testnamespace", "resource": "triggers",
+					},
+				}),
+			},
+		},
+		{
+			Name: "Trigger created, broker ready, subscriber is addressable, pubsub client creation fails",
+			Key:  testKey,
+			Objects: []runtime.Object{
+				NewBroker(brokerName, testNS,
+					WithBrokerClass(brokerv1beta1.BrokerClass),
+					WithInitBrokerConditions,
+					WithBrokerReady("url"),
+					WithBrokerDeliverySpec(brokerDeliverySpec),
+					WithBrokerSetDefaults,
+				),
+				makeSubscriberAddressableAsUnstructured(),
+				NewTrigger(triggerName, testNS, brokerName,
+					WithTriggerUID(testUID),
+					WithTriggerSubscriberRef(subscriberGVK, subscriberName, testNS),
+					WithTriggerSetDefaults),
+			},
+			WantStatusUpdates: []clientgotesting.UpdateActionImpl{{
+				Object: NewTrigger(triggerName, testNS, brokerName,
+					WithTriggerUID(testUID),
+					WithTriggerSubscriberRef(subscriberGVK, subscriberName, testNS),
+					WithTriggerBrokerReady,
+					WithTriggerSubscriptionReady,
+					WithTriggerTopicReady,
+					WithTriggerSubscriberResolvedSucceeded,
+					WithTriggerStatusSubscriberURI(subscriberURI),
+					WithTriggerSetDefaults,
+					WithTriggerDependencyUnknown("", ""),
+					WithTriggerTopicUnknown("PubSubClientCreationFailed", "Failed to create Pub/Sub client: Invoke time 0 reaches the max invoke time 0"),
+					WithTriggerSubscriptionUnknown("PubSubClientCreationFailed", "Failed to create Pub/Sub client: Invoke time 0 reaches the max invoke time 0"),
+				),
+			}},
+			WantEvents: []string{
+				triggerFinalizerUpdatedEvent,
+				Eventf(corev1.EventTypeWarning, "InternalError", "Invoke time 0 reaches the max invoke time 0"),
+			},
+			WantPatches: []clientgotesting.PatchActionImpl{
+				patchFinalizers(testNS, triggerName, finalizerName),
+			},
+			OtherTestData: map[string]interface{}{
+				"pre": []PubsubAction{
+					Topic("test-dead-letter-topic-id"),
+				},
+				"maxPSClientCreateTime": 0,
+			},
+			WantErr: true,
+		},
 	}
 
 	table.Test(t, MakeFactory(func(ctx context.Context, listers *Listers, cmw configmap.Watcher, testData map[string]interface{}) controller.Reconciler {
+		srv := pstest.NewServer()
 		// Insert pubsub client for PostConditions and create fixtures
-		psclient, close := TestPubsubClient(ctx, testProject)
+		psclient, _ := GetTestClientCreateFunc(srv.Addr)(ctx, testProject)
+		savedCreateFn := createPubsubClientFn
+		close := func() {
+			srv.Close()
+			createPubsubClientFn = savedCreateFn
+		}
 		t.Cleanup(close)
 		var drStore *dataresidency.Store
 		if testData != nil {
@@ -475,18 +677,28 @@ func TestAllCasesTrigger(t *testing.T) {
 			}
 		}
 
+		// If maxPSClientCreateTime is in testData, no pubsub client is passed to reconciler, the reconciler
+		// will create one in demand
+		testPSClient := psclient
+		if maxTime, ok := testData["maxPSClientCreateTime"]; ok {
+			// Overwrite the createPubsubClientFn to one that failed when called more than maxTime times.
+			// maxTime=0 is used to inject error
+			createPubsubClientFn = GetFailedTestClientCreateFunc(srv.Addr, maxTime.(int))
+			testPSClient = nil
+		}
+
 		ctx = addressable.WithDuck(ctx)
 		ctx = resource.WithDuck(ctx)
-		ctx = conditions.WithDuck(ctx)
+		ctx = source.WithDuck(ctx)
 
 		r := &Reconciler{
 			Base:               reconciler.NewBase(ctx, controllerAgentName, cmw),
 			brokerLister:       listers.GetBrokerLister(),
-			kresourceTracker:   duck.NewListableTracker(ctx, conditions.Get, func(types.NamespacedName) {}, 0),
+			sourceTracker:      duck.NewListableTracker(ctx, source.Get, func(types.NamespacedName) {}, 0),
 			addressableTracker: duck.NewListableTracker(ctx, addressable.Get, func(types.NamespacedName) {}, 0),
 			uriResolver:        resolver.NewURIResolver(ctx, func(types.NamespacedName) {}),
 			projectID:          testProject,
-			pubsubClient:       psclient,
+			pubsubClient:       testPSClient,
 			dataresidencyStore: drStore,
 		}
 

@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/google/knative-gcp/pkg/testing/testloggingutil"
+
 	"cloud.google.com/go/pubsub"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -30,7 +32,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 
-	metadataClient "github.com/google/knative-gcp/pkg/gclient/metadata"
 	"github.com/google/knative-gcp/pkg/tracing"
 	"github.com/google/knative-gcp/pkg/utils"
 
@@ -47,10 +48,10 @@ import (
 	v1 "github.com/google/knative-gcp/pkg/apis/intevents/v1"
 	topicreconciler "github.com/google/knative-gcp/pkg/client/injection/reconciler/intevents/v1/topic"
 	listers "github.com/google/knative-gcp/pkg/client/listers/intevents/v1"
-	gpubsub "github.com/google/knative-gcp/pkg/gclient/pubsub"
 	"github.com/google/knative-gcp/pkg/reconciler/identity"
 	"github.com/google/knative-gcp/pkg/reconciler/intevents"
 	"github.com/google/knative-gcp/pkg/reconciler/intevents/topic/resources"
+	reconcilerutilspubsub "github.com/google/knative-gcp/pkg/reconciler/utils/pubsub"
 )
 
 const (
@@ -83,7 +84,7 @@ type Reconciler struct {
 
 	// createClientFn is the function used to create the Pub/Sub client that interacts with Pub/Sub.
 	// This is needed so that we can inject a mock client for UTs purposes.
-	createClientFn gpubsub.CreateFn
+	createClientFn reconcilerutilspubsub.CreateFn
 }
 
 // Check that our Reconciler implements Interface.
@@ -91,6 +92,10 @@ var _ topicreconciler.Interface = (*Reconciler)(nil)
 
 func (r *Reconciler) ReconcileKind(ctx context.Context, topic *v1.Topic) reconciler.Event {
 	ctx = logging.WithLogger(ctx, r.Logger.With(zap.Any("topic", topic)))
+
+	// This is added purely for the TestCloudLogging E2E tests, which verify that the log line is
+	// written based on certain annotations.
+	testloggingutil.LogBasedOnAnnotations(logging.FromContext(ctx).Desugar(), topic.Annotations)
 
 	topic.Status.InitializeConditions()
 	topic.Status.ObservedGeneration = topic.Generation
@@ -130,7 +135,7 @@ func (r *Reconciler) ReconcileKind(ctx context.Context, topic *v1.Topic) reconci
 
 func (r *Reconciler) reconcileTopic(ctx context.Context, topic *v1.Topic) error {
 	if topic.Status.ProjectID == "" {
-		projectID, err := utils.ProjectID(topic.Spec.Project, metadataClient.NewDefaultMetadataClient())
+		projectID, err := utils.ProjectIDOrDefault(topic.Spec.Project)
 		if err != nil {
 			logging.FromContext(ctx).Desugar().Error("Failed to find project id", zap.Error(err))
 			return err
@@ -204,7 +209,6 @@ func (r *Reconciler) deleteTopic(ctx context.Context, topic *v1.Topic) error {
 		return err
 	}
 	defer client.Close()
-
 	t := client.Topic(topic.Status.TopicID)
 	exists, err := t.Exists(ctx)
 	if err != nil {

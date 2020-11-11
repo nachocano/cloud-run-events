@@ -24,8 +24,8 @@ import (
 	"time"
 
 	schemasv1 "github.com/google/knative-gcp/pkg/schemas/v1"
-	"github.com/google/knative-gcp/test/e2e/lib"
-	"github.com/google/knative-gcp/test/e2e/lib/resources"
+	"github.com/google/knative-gcp/test/lib"
+	"github.com/google/knative-gcp/test/lib/resources"
 
 	"knative.dev/pkg/test/helpers"
 
@@ -58,9 +58,7 @@ func SmokeCloudAuditLogsSourceTestHelper(t *testing.T, authConfig lib.AuthConfig
 		ServiceAccountName: authConfig.ServiceAccountName,
 	}
 
-	if cloudAuditLogsSourceVersion == "v1alpha1" {
-		lib.MakeAuditLogsV1alpha1OrDie(client, auditLogsConfig)
-	} else if cloudAuditLogsSourceVersion == "v1beta1" {
+	if cloudAuditLogsSourceVersion == "v1beta1" {
 		lib.MakeAuditLogsV1beta1OrDie(client, auditLogsConfig)
 	} else if cloudAuditLogsSourceVersion == "v1" {
 		lib.MakeAuditLogsOrDie(client, auditLogsConfig)

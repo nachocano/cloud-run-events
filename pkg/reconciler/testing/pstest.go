@@ -197,19 +197,47 @@ func getPubsubClient(r *rtesting.TableRow) *pubsub.Client {
 	return r.OtherTestData["_psclient"].(*pubsub.Client)
 }
 
-func TestPubsubClient(ctx context.Context, projectID string) (*pubsub.Client, func()) {
-	srv := pstest.NewServer()
-	conn, err := grpc.Dial(srv.Addr, grpc.WithInsecure())
-	if err != nil {
-		panic(fmt.Errorf("failed to dial test pubsub connection: %v", err))
-	}
+func TestPubsubClient(ctx context.Context, projectID string, opts ...pstest.ServerReactorOption) (*pubsub.Client, func()) {
+	srv := pstest.NewServer(opts...)
+	client, _ := GetTestClientCreateFunc(srv.Addr)(ctx, projectID)
 	close := func() {
 		srv.Close()
-		conn.Close()
+		client.Close()
 	}
-	c, err := pubsub.NewClient(context.Background(), projectID, option.WithGRPCConn(conn))
-	if err != nil {
-		panic(fmt.Errorf("failed to create test pubsub client: %v", err))
+	return client, close
+}
+
+// GetTestClientCreateFunc returns a client creation function with same type as pubsub.NewClient. With
+// this helper function, multiple clients can be created. This is necessary for any test involving
+// multiple projects. Eg. in sources multiple project is allowed for topics.
+func GetTestClientCreateFunc(target string) func(context.Context, string, ...option.ClientOption) (*pubsub.Client, error) {
+	return func(ctx context.Context, projectID string, opts ...option.ClientOption) (*pubsub.Client, error) {
+		newConn, err := grpc.Dial(target, grpc.WithInsecure())
+		if err != nil {
+			panic(fmt.Errorf("failed to dial test pubsub connection: %v", err))
+		}
+		// Connection cleanup
+		go func() {
+			<-ctx.Done()
+			newConn.Close()
+		}()
+		c, err := pubsub.NewClient(context.Background(), projectID, option.WithGRPCConn(newConn))
+		if err != nil {
+			panic(fmt.Errorf("failed to create test pubsub client: %v", err))
+		}
+		return c, nil
 	}
-	return c, close
+}
+
+// GetFailedTestClientCreateFunc returns a pubsub client creation function that will fail when the invoke
+// time reaches maxCallTime. When maxCallTime is set to 0, it will always fail.
+func GetFailedTestClientCreateFunc(target string, maxCallTime int) func(context.Context, string, ...option.ClientOption) (*pubsub.Client, error) {
+	i := 0
+	return func(ctx context.Context, projectID string, opts ...option.ClientOption) (*pubsub.Client, error) {
+		if i >= maxCallTime {
+			return nil, fmt.Errorf("Invoke time %v reaches the max invoke time %v", i, maxCallTime)
+		}
+		i++
+		return GetTestClientCreateFunc(target)(ctx, projectID)
+	}
 }

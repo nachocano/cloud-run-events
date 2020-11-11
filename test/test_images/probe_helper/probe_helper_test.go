@@ -265,14 +265,30 @@ func runTestCloudSchedulerSource(ctx context.Context, group *errgroup.Group, per
 	})
 }
 
+type probeEventOption func(*cloudevents.Event)
+
+func withProbeSubject(subject string) probeEventOption {
+	return func(event *cloudevents.Event) {
+		event.SetSubject(subject)
+	}
+}
+
+func withProbeTimeout(timeout time.Duration) probeEventOption {
+	return func(event *cloudevents.Event) {
+		event.SetExtension("timeout", timeout.String())
+	}
+}
+
 // Creates a new CloudEvent in the shape of probe events sent to the probe helper.
-func probeEvent(name, subject string) *cloudevents.Event {
+func probeEvent(name string, opts ...probeEventOption) *cloudevents.Event {
 	event := cloudevents.NewEvent()
 	event.SetID(name + "-1234567890")
-	event.SetSubject(subject)
 	event.SetSource("probe-helper-test")
 	event.SetType(name)
 	event.SetTime(time.Now())
+	for _, opt := range opts {
+		opt(&event)
+	}
 	return &event
 }
 
@@ -326,6 +342,156 @@ func TestProbeHelper(t *testing.T) {
 	group, ctx := errgroup.WithContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 
+	phr := makeProbeHelper(ctx, t, group)
+	go phr.probeHelper.run(ctx)
+
+	// Create a testing client from which to send probe events to the probe helper.
+	p, err := cloudevents.NewHTTP(cloudevents.WithTarget(phr.probeURL))
+	if err != nil {
+		t.Fatalf("Failed to create HTTP protocol of the testing client: %s", err.Error())
+	}
+	c, err := cloudevents.NewClient(p)
+	if err != nil {
+		t.Fatalf("Failed to create testing client: %s", err.Error())
+	}
+
+	cases := []struct {
+		name  string
+		steps []eventAndResult
+	}{{
+		name: "Broker E2E delivery probe",
+		steps: []eventAndResult{
+			{
+				event:      probeEvent("broker-e2e-delivery-probe"),
+				wantResult: cloudevents.ResultACK,
+			},
+		},
+	}, {
+		name: "Unrecognized Broker E2E delivery probe subject",
+		steps: []eventAndResult{
+			{
+				event:      probeEvent("broker-e2e-delivery-probe", withProbeSubject("invalid-subject")),
+				wantResult: cloudevents.ResultNACK,
+			},
+		},
+	}, {
+		name: "CloudPubSubSource probe",
+		steps: []eventAndResult{
+			{
+				event:      probeEvent("cloudpubsubsource-probe"),
+				wantResult: cloudevents.ResultACK,
+			},
+		},
+	}, {
+		name: "Unrecognized CloudPubSubSource probe subject",
+		steps: []eventAndResult{
+			{
+				event:      probeEvent("cloudpubsubsource-probe", withProbeSubject("invalid-subject")),
+				wantResult: cloudevents.ResultNACK,
+			},
+		},
+	}, {
+		name: "CloudStorageSource probe",
+		steps: []eventAndResult{
+			{
+				event:      probeEvent("cloudstoragesource-probe", withProbeSubject("create")),
+				wantResult: cloudevents.ResultACK,
+			},
+			{
+				event:      probeEvent("cloudstoragesource-probe", withProbeSubject("update-metadata")),
+				wantResult: cloudevents.ResultACK,
+			},
+			{
+				event:      probeEvent("cloudstoragesource-probe", withProbeSubject("archive")),
+				wantResult: cloudevents.ResultACK,
+			},
+			{
+				event:      probeEvent("cloudstoragesource-probe", withProbeSubject("delete")),
+				wantResult: cloudevents.ResultACK,
+			},
+		},
+	}, {
+		name: "Unrecognized CloudStorageSource probe subject",
+		steps: []eventAndResult{
+			{
+				event:      probeEvent("cloudstoragesource-probe", withProbeSubject("invalid-subject")),
+				wantResult: cloudevents.ResultNACK,
+			},
+		},
+	}, {
+		name: "CloudAuditLogsSource probe",
+		steps: []eventAndResult{
+			{
+				event:      probeEvent("cloudauditlogssource-probe"),
+				wantResult: cloudevents.ResultACK,
+			},
+		},
+	}, {
+		name: "Unrecognized CloudAuditLogsSource probe subject",
+		steps: []eventAndResult{
+			{
+				event:      probeEvent("cloudauditlogssource-probe", withProbeSubject("invalid-subject")),
+				wantResult: cloudevents.ResultNACK,
+			},
+		},
+	}, {
+		name: "CloudSchedulerSource probe",
+		steps: []eventAndResult{
+			{
+				event:      probeEvent("cloudschedulersource-probe"),
+				wantResult: cloudevents.ResultACK,
+			},
+		},
+	}, {
+		name: "Unrecognized CloudSchedulerSource probe subject",
+		steps: []eventAndResult{
+			{
+				event:      probeEvent("cloudschedulersource-probe", withProbeSubject("invalid-subject")),
+				wantResult: cloudevents.ResultNACK,
+			},
+		},
+	}, {
+		name: "Unrecognized probe event type",
+		steps: []eventAndResult{
+			{
+				event:      probeEvent("unrecognized-probe-type"),
+				wantResult: cloudevents.ResultNACK,
+			},
+		},
+	}, {
+		name: "Custom timeout",
+		steps: []eventAndResult{
+			{
+				event:      probeEvent("broker-e2e-delivery-probe", withProbeTimeout(0)),
+				wantResult: cloudevents.ResultNACK,
+			},
+		},
+	}}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, step := range tc.steps {
+				if result := c.Send(ctx, *step.event); !errors.Is(result, step.wantResult) {
+					t.Fatalf("wanted result %+v, got %+v", step.wantResult, result)
+				}
+			}
+		})
+	}
+	// Cancel gracefully to avoid logger panic if parent goroutine terminates.
+	phr.cleanup()
+	cancel()
+	if err := group.Wait(); err != nil {
+		t.Fatalf("Error in probe helper fake sources: %v", err)
+	}
+}
+
+type makeProbeHelperReturn struct {
+	probeHelper    *ProbeHelper
+	probeURL       string
+	healthCheckURL string
+	cleanup        func()
+}
+
+func makeProbeHelper(ctx context.Context, t *testing.T, group *errgroup.Group) makeProbeHelperReturn {
 	// Set up ports for testing the probe helper.
 	receiverListener, err := GetFreePortListener()
 	if err != nil {
@@ -339,6 +505,7 @@ func TestProbeHelper(t *testing.T) {
 	}
 	probePort := probeListener.Addr().(*net.TCPAddr).Port
 	probeURL := fmt.Sprintf("http://localhost:%d", probePort)
+	healthCheckerURL := fmt.Sprintf("http://localhost:%d/healthz", receiverPort)
 
 	// Set up the resources for testing the CloudPubSubSource.
 	pubsubClient, closePubsub := testPubsubClient(ctx, t, testProjectID)
@@ -368,7 +535,6 @@ func TestProbeHelper(t *testing.T) {
 
 	// Run the test Broker for testing Broker E2E delivery.
 	brokerURL := runTestBroker(ctx, group, receiverURL)
-
 	// Create the probe helper and start a goroutine to run it.
 	ph := &ProbeHelper{
 		projectID:                  testProjectID,
@@ -380,148 +546,25 @@ func TestProbeHelper(t *testing.T) {
 		probeListener:              probeListener,
 		receiverListener:           receiverListener,
 		cloudSchedulerSourcePeriod: time.Minute,
-		timeoutDuration:            30 * time.Minute,
+		defaultTimeoutDuration:     2 * time.Minute,
+		maxTimeoutDuration:         30 * time.Minute,
 		healthChecker: &healthChecker{
-			port:             0,
-			maxStaleDuration: time.Minute,
+			maxStaleDuration: time.Second,
 		},
 	}
-	go ph.run(ctx)
-
-	// Create a testing client from which to send probe events to the probe helper.
-	p, err := cloudevents.NewHTTP(cloudevents.WithTarget(probeURL))
-	if err != nil {
-		t.Fatalf("Failed to create HTTP protocol of the testing client: %s", err.Error())
-	}
-	c, err := cloudevents.NewClient(p)
-	if err != nil {
-		t.Fatalf("Failed to create testing client: %s", err.Error())
-	}
-
-	cases := []struct {
-		name  string
-		steps []eventAndResult
-	}{{
-		name: "Broker E2E delivery probe",
-		steps: []eventAndResult{
-			{
-				event:      probeEvent("broker-e2e-delivery-probe", ""),
-				wantResult: cloudevents.ResultACK,
-			},
+	return makeProbeHelperReturn{
+		probeHelper:    ph,
+		probeURL:       probeURL,
+		healthCheckURL: healthCheckerURL,
+		cleanup: func() {
+			closeStorage()
+			closePubsub()
 		},
-	}, {
-		name: "Unrecognized Broker E2E delivery probe subject",
-		steps: []eventAndResult{
-			{
-				event:      probeEvent("broker-e2e-delivery-probe", "invalid-subject"),
-				wantResult: cloudevents.ResultNACK,
-			},
-		},
-	}, {
-		name: "CloudPubSubSource probe",
-		steps: []eventAndResult{
-			{
-				event:      probeEvent("cloudpubsubsource-probe", ""),
-				wantResult: cloudevents.ResultACK,
-			},
-		},
-	}, {
-		name: "Unrecognized CloudPubSubSource probe subject",
-		steps: []eventAndResult{
-			{
-				event:      probeEvent("cloudpubsubsource-probe", "invalid-subject"),
-				wantResult: cloudevents.ResultNACK,
-			},
-		},
-	}, {
-		name: "CloudStorageSource probe",
-		steps: []eventAndResult{
-			{
-				event:      probeEvent("cloudstoragesource-probe", "create"),
-				wantResult: cloudevents.ResultACK,
-			},
-			{
-				event:      probeEvent("cloudstoragesource-probe", "update-metadata"),
-				wantResult: cloudevents.ResultACK,
-			},
-			{
-				event:      probeEvent("cloudstoragesource-probe", "archive"),
-				wantResult: cloudevents.ResultACK,
-			},
-			{
-				event:      probeEvent("cloudstoragesource-probe", "delete"),
-				wantResult: cloudevents.ResultACK,
-			},
-		},
-	}, {
-		name: "Unrecognized CloudStorageSource probe subject",
-		steps: []eventAndResult{
-			{
-				event:      probeEvent("cloudstoragesource-probe", "invalid-subject"),
-				wantResult: cloudevents.ResultNACK,
-			},
-		},
-	}, {
-		name: "CloudAuditLogsSource probe",
-		steps: []eventAndResult{
-			{
-				event:      probeEvent("cloudauditlogssource-probe", ""),
-				wantResult: cloudevents.ResultACK,
-			},
-		},
-	}, {
-		name: "Unrecognized CloudAuditLogsSource probe subject",
-		steps: []eventAndResult{
-			{
-				event:      probeEvent("cloudauditlogssource-probe", "invalid-subject"),
-				wantResult: cloudevents.ResultNACK,
-			},
-		},
-	}, {
-		name: "CloudSchedulerSource probe",
-		steps: []eventAndResult{
-			{
-				event:      probeEvent("cloudschedulersource-probe", ""),
-				wantResult: cloudevents.ResultACK,
-			},
-		},
-	}, {
-		name: "Unrecognized CloudSchedulerSource probe subject",
-		steps: []eventAndResult{
-			{
-				event:      probeEvent("cloudschedulersource-probe", "invalid-subject"),
-				wantResult: cloudevents.ResultNACK,
-			},
-		},
-	}, {
-		name: "Unrecognized probe event type",
-		steps: []eventAndResult{
-			{
-				event:      probeEvent("unrecognized-probe-type", ""),
-				wantResult: cloudevents.ResultNACK,
-			},
-		},
-	}}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			for _, step := range tc.steps {
-				if result := c.Send(ctx, *step.event); !errors.Is(result, step.wantResult) {
-					t.Fatalf("wanted result %+v, got %+v", step.wantResult, result)
-				}
-			}
-		})
-	}
-	// Cancel gracefully to avoid logger panic if parent goroutine terminates.
-	closePubsub()
-	closeStorage()
-	cancel()
-	if err := group.Wait(); err != nil {
-		t.Fatalf("Error in probe helper fake sources: %v", err)
 	}
 }
 
-func assertHealthCheckResult(t *testing.T, port int, ok bool) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/healthz", port), nil)
+func assertHealthCheckResult(t *testing.T, url string, ok bool) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		t.Fatalf("Failed to create health check request: %v", err)
 	}
@@ -549,33 +592,27 @@ func GetFreePortListener() (net.Listener, error) {
 }
 
 func TestProbeHelperHealth(t *testing.T) {
-	t.Run("Force unhealth check", func(t *testing.T) {
-		ctx := logtest.TestContextWithLogger(t)
-		ctx, cancel := context.WithCancel(ctx)
-		defer cancel()
+	ctx := logtest.TestContextWithLogger(t)
+	group, ctx := errgroup.WithContext(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-		healthCheckerListener, err := GetFreePortListener()
-		if err != nil {
-			t.Errorf("Failed to get free health checker port listener: %v", err)
-		}
-		healthCheckerPort := healthCheckerListener.Addr().(*net.TCPAddr).Port
-		// Create the probe helper and start a goroutine to run it.
-		ph := &ProbeHelper{
-			projectID: testProjectID,
-			brokerURL: "http://localhost:0/",
-			healthChecker: &healthChecker{
-				listener:         healthCheckerListener,
-				maxStaleDuration: time.Second,
-			},
-		}
-		go ph.run(ctx)
+	phr := makeProbeHelper(ctx, t, group)
+	go phr.probeHelper.run(ctx)
 
-		// Make sure the health checker is up.
-		time.Sleep(500 * time.Millisecond)
-		assertHealthCheckResult(t, healthCheckerPort, true)
+	// Make sure the health checker is up.
+	time.Sleep(500 * time.Millisecond)
+	assertHealthCheckResult(t, phr.healthCheckURL, true)
 
-		// Intentionally causing an unhealth check.
-		time.Sleep(time.Second)
-		assertHealthCheckResult(t, healthCheckerPort, false)
-	})
+	// Guarantee that it has been long enough that the stale duration has been reached. This will cause
+	// the health checker's result to be unhealthy.
+	time.Sleep(2 * phr.probeHelper.healthChecker.maxStaleDuration)
+	assertHealthCheckResult(t, phr.healthCheckURL, false)
+
+	// Cancel gracefully to avoid logger panic if parent goroutine terminates.
+	phr.cleanup()
+	cancel()
+	if err := group.Wait(); err != nil {
+		t.Fatalf("Error in probe helper fake sources: %v", err)
+	}
 }

@@ -16,8 +16,6 @@
 # Script entry point.
 source $(dirname "$0")/e2e-secret-tests.sh
 
-initialize $@
-
 if [ "${SKIP_TESTS:-}" == "true" ]; then
   echo "**************************************"
   echo "***         TESTS SKIPPED          ***"
@@ -25,8 +23,10 @@ if [ "${SKIP_TESTS:-}" == "true" ]; then
   exit 0
 fi
 
+initialize $@
+
 go_test_e2e -timeout=30m -parallel=12 ./test/e2e \
-  -channels='messaging.cloud.google.com/v1alpha1:Channel,messaging.cloud.google.com/v1beta1:Channel' \
+  -channels='messaging.cloud.google.com/v1beta1:Channel' \
   || fail_test
 
 success

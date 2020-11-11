@@ -29,9 +29,9 @@ import (
 	monitoring "cloud.google.com/go/monitoring/apiv3/v2"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/google/knative-gcp/test"
-	"github.com/google/knative-gcp/test/e2e/lib"
-	"github.com/google/knative-gcp/test/e2e/lib/metrics"
-	"github.com/google/knative-gcp/test/e2e/lib/resources"
+	"github.com/google/knative-gcp/test/lib"
+	"github.com/google/knative-gcp/test/lib/metrics"
+	"github.com/google/knative-gcp/test/lib/resources"
 	monitoringpb "google.golang.org/genproto/googleapis/monitoring/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	eventingtest "knative.dev/eventing/test"
@@ -56,14 +56,6 @@ func TestMain(m *testing.M) {
 			// ChannelFeatureMap saves the channel-features mapping.
 			// Each pair means the channel support the given list of features.
 			ComponentFeatureMap: map[metav1.TypeMeta][]eventingtestlib.Feature{
-				{
-					APIVersion: resources.MessagingAPIVersion,
-					Kind:       "Channel",
-				}: {
-					eventingtestlib.FeatureBasic,
-					eventingtestlib.FeatureRedelivery,
-					eventingtestlib.FeaturePersistence,
-				},
 				{
 					APIVersion: resources.MessagingV1beta1APIVersion,
 					Kind:       "Channel",

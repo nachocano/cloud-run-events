@@ -81,21 +81,19 @@ The Probe Helper can handle multiple different types of probes.
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap"
+
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/signals"
 
-	metadataClient "github.com/google/knative-gcp/pkg/gclient/metadata"
 	"github.com/google/knative-gcp/pkg/utils"
 )
 
 type envConfig struct {
-	// Environment variable containing the project ID
-	ProjectID string `envconfig:"PROJECT_ID"`
-
 	// Environment variable containing the sink URL (broker URL) that the event will be forwarded to by the probeHelper for the e2e delivery probe
 	BrokerURL string `envconfig:"K_SINK" default:"http://default-brokercell-ingress.cloud-run-events.svc.cluster.local/cloud-run-events-probe/default"`
 
@@ -108,33 +106,44 @@ type envConfig struct {
 	// Environment variable containing an upper bound on the duration between events emitted by the CloudSchedulerSource
 	CloudSchedulerSourcePeriod time.Duration `envconfig:"CLOUDSCHEDULERSOURCE_PERIOD" default:"90s"`
 
-	// Environment variable containing the port which listens to the probe to deliver the event
+	// Environment variable containing the port which listens to the probe to forward events
 	ProbePort int `envconfig:"PROBE_PORT" default:"8070"`
 
-	// Environment variable containing the port to receive the event from the trigger
+	// Environment variable containing the port to receive delivered events
 	ReceiverPort int `envconfig:"RECEIVER_PORT" default:"8080"`
-
-	// Environment variable containing the port to send health checks to
-	HealthCheckerPort int `envconfig:"HEALTH_CHECKER_PORT" default:"8060"`
 
 	// Environment variable containing the maximum tolerated staleness duration
 	MaxStaleDuration time.Duration `envconfig:"MAX_STALE_DURATION" default:"5m"`
 
-	// Environment variable containing the timeout duration to wait for an event to be delivered back
-	TimeoutDuration time.Duration `envconfig:"TIMEOUT_DURATION" default:"30m"`
+	// Environment variable containing the default timeout duration to wait for an event to be delivered, if no custom timeout is specified
+	DefaultTimeoutDuration time.Duration `envconfig:"DEFAULT_TIMEOUT_DURATION" default:"2m"`
+
+	// Environment variable containing the maximum timeout duration to wait for an event to be delivered
+	MaxTimeoutDuration time.Duration `envconfig:"MAX_TIMEOUT_DURATION" default:"30m"`
 }
 
 func main() {
-	ctx := signals.NewContext()
-
 	var env envConfig
 	if err := envconfig.Process("", &env); err != nil {
-		logging.FromContext(ctx).Fatal("Failed to process env var", zap.Error(err))
+		panic(fmt.Sprintf("Failed to process env var: %s", err))
 	}
-	projectID, err := utils.ProjectID(env.ProjectID, metadataClient.NewDefaultMetadataClient())
+
+	// Create the logger and attach it to the context
+	loggingConfig, err := logging.NewConfigFromMap(map[string]string{})
+	if err != nil {
+		// If this fails, there is no recovering.
+		panic(err)
+	}
+	logger, _ := logging.NewLoggerFromConfig(loggingConfig, "probe-helper")
+	ctx := logging.WithLogger(signals.NewContext(), logger)
+
+	// Get the default project ID
+	projectID, err := utils.ProjectIDOrDefault("")
 	if err != nil {
 		logging.FromContext(ctx).Fatal("Failed to get the default project ID", zap.Error(err))
 	}
+
+	// Create and start the probe helper
 	ph := &ProbeHelper{
 		projectID:                  projectID,
 		brokerURL:                  env.BrokerURL,
@@ -143,9 +152,9 @@ func main() {
 		cloudPubSubSourceTopicID:   env.CloudPubSubSourceTopicID,
 		cloudStorageSourceBucketID: env.CloudStorageSourceBucketID,
 		cloudSchedulerSourcePeriod: env.CloudSchedulerSourcePeriod,
-		timeoutDuration:            env.TimeoutDuration,
+		defaultTimeoutDuration:     env.DefaultTimeoutDuration,
+		maxTimeoutDuration:         env.MaxTimeoutDuration,
 		healthChecker: &healthChecker{
-			port:             env.HealthCheckerPort,
 			maxStaleDuration: env.MaxStaleDuration,
 		},
 	}

@@ -25,8 +25,8 @@ import (
 	"knative.dev/pkg/test/helpers"
 
 	schemasv1 "github.com/google/knative-gcp/pkg/schemas/v1"
-	"github.com/google/knative-gcp/test/e2e/lib"
-	"github.com/google/knative-gcp/test/e2e/lib/resources"
+	"github.com/google/knative-gcp/test/lib"
+	"github.com/google/knative-gcp/test/lib/resources"
 )
 
 // SmokeCloudSchedulerSourceTestHelper tests if a CloudSchedulerSource object can be created to ready state.
@@ -50,9 +50,7 @@ func SmokeCloudSchedulerSourceTestHelper(t *testing.T, authConfig lib.AuthConfig
 		ServiceAccountName: authConfig.ServiceAccountName,
 	}
 
-	if cloudSchedulerSourceVersion == "v1alpha1" {
-		lib.MakeSchedulerOrDie(client, schedulerConfig)
-	} else if cloudSchedulerSourceVersion == "v1beta1" {
+	if cloudSchedulerSourceVersion == "v1beta1" {
 		lib.MakeSchedulerOrDie(client, schedulerConfig)
 	} else if cloudSchedulerSourceVersion == "v1" {
 		lib.MakeSchedulerOrDie(client, schedulerConfig)

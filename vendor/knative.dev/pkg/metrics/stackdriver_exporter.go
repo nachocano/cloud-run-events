@@ -69,7 +69,7 @@ var (
 	newStackdriverExporterFunc func(sd.Options) (view.Exporter, error)
 
 	// kubeclient is the in-cluster Kubernetes kubeclient, which is lazy-initialized on first use.
-	kubeclient *kubernetes.Clientset
+	kubeclient kubernetes.Interface
 	// initClientOnce is the lazy initializer for kubeclient.
 	initClientOnce sync.Once
 	// kubeclientInitErr capture an error during initClientOnce
@@ -89,7 +89,7 @@ var (
 	// which should be promoted to Stackdriver Resource labels via opencensus resources.
 	metricToResourceLabels = map[string]*resourceTemplate{}
 
-	// A variable for testing to reduce the size (number of metrics) buffered before
+	// TestOverrideBundleCount is a variable for testing to reduce the size (number of metrics) buffered before
 	// Stackdriver will send a bundled metric report. Only applies if non-zero.
 	TestOverrideBundleCount = 0
 )
@@ -200,7 +200,7 @@ func newStackdriverExporter(config *metricsConfig, logger *zap.SugaredLogger) (v
 		logger.Errorw("Failed to create the Stackdriver exporter: ", zap.Error(err))
 		return nil, nil, err
 	}
-	logger.Infof("Created Opencensus Stackdriver exporter with config %v", config)
+	logger.Info("Created Opencensus Stackdriver exporter with config ", config)
 	// We have to return a ResourceExporterFactory here to enable tracking resources, even though we always poll for them.
 	return &pollOnlySDExporter{e},
 		func(r *resource.Resource) (view.Exporter, error) { return &pollOnlySDExporter{}, nil },
@@ -363,7 +363,7 @@ func getStackdriverSecret(ctx context.Context, secretFetcher SecretFetcher) (*co
 	}
 
 	if secErr != nil {
-		return nil, fmt.Errorf("error getting Secret [%v] in namespace [%v]: %v", secretName, secretNamespace, secErr)
+		return nil, fmt.Errorf("error getting Secret [%v] in namespace [%v]: %w", secretName, secretNamespace, secErr)
 	}
 
 	return sec, nil

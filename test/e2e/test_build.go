@@ -28,8 +28,8 @@ import (
 
 	"github.com/google/knative-gcp/pkg/apis/events"
 	schemasv1 "github.com/google/knative-gcp/pkg/schemas/v1"
-	"github.com/google/knative-gcp/test/e2e/lib"
-	"github.com/google/knative-gcp/test/e2e/lib/resources"
+	"github.com/google/knative-gcp/test/lib"
+	"github.com/google/knative-gcp/test/lib/resources"
 
 	// The following line to load the gcp plugin (only required to authenticate against GKE clusters).
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -54,9 +54,7 @@ func SmokeCloudBuildSourceTestHelper(t *testing.T, authConfig lib.AuthConfig, cl
 		ServiceAccountName: authConfig.ServiceAccountName,
 	}
 
-	if cloudBuildSourceVersion == "v1alpha1" {
-		lib.MakeBuildV1alpha1OrDie(client, buildConfig)
-	} else if cloudBuildSourceVersion == "v1beta1" {
+	if cloudBuildSourceVersion == "v1beta1" {
 		lib.MakeBuildV1beta1OrDie(client, buildConfig)
 	} else if cloudBuildSourceVersion == "v1" {
 		lib.MakeBuildOrDie(client, buildConfig)

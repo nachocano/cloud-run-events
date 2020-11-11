@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"cloud.google.com/go/pubsub"
 	"go.uber.org/zap"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -31,7 +32,6 @@ import (
 	appsv1listers "k8s.io/client-go/listers/apps/v1"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 
-	metadataClient "github.com/google/knative-gcp/pkg/gclient/metadata"
 	"github.com/google/knative-gcp/pkg/utils"
 
 	"knative.dev/pkg/apis"
@@ -44,10 +44,10 @@ import (
 
 	v1 "github.com/google/knative-gcp/pkg/apis/intevents/v1"
 	listers "github.com/google/knative-gcp/pkg/client/listers/intevents/v1"
-	gpubsub "github.com/google/knative-gcp/pkg/gclient/pubsub"
 	"github.com/google/knative-gcp/pkg/reconciler/identity"
 	"github.com/google/knative-gcp/pkg/reconciler/intevents"
 	"github.com/google/knative-gcp/pkg/reconciler/intevents/pullsubscription/resources"
+	reconcilerutilspubsub "github.com/google/knative-gcp/pkg/reconciler/utils/pubsub"
 	"github.com/google/knative-gcp/pkg/tracing"
 )
 
@@ -92,7 +92,7 @@ type Base struct {
 
 	// CreateClientFn is the function used to create the Pub/Sub client that interacts with Pub/Sub.
 	// This is needed so that we can inject a mock client for UTs purposes.
-	CreateClientFn gpubsub.CreateFn
+	CreateClientFn reconcilerutilspubsub.CreateFn
 
 	// ReconcileDataPlaneFn is the function used to reconcile the data plane resources.
 	ReconcileDataPlaneFn ReconcileDataPlaneFunc
@@ -155,7 +155,7 @@ func (r *Base) ReconcileKind(ctx context.Context, ps *v1.PullSubscription) recon
 
 func (r *Base) reconcileSubscription(ctx context.Context, ps *v1.PullSubscription) (string, error) {
 	if ps.Status.ProjectID == "" {
-		projectID, err := utils.ProjectID(ps.Spec.Project, metadataClient.NewDefaultMetadataClient())
+		projectID, err := utils.ProjectIDOrDefault(ps.Spec.Project)
 		if err != nil {
 			logging.FromContext(ctx).Desugar().Error("Failed to find project id", zap.Error(err))
 			return "", err
@@ -196,7 +196,7 @@ func (r *Base) reconcileSubscription(ctx context.Context, ps *v1.PullSubscriptio
 	}
 
 	// subConfig is the wanted config based on settings.
-	subConfig := gpubsub.SubscriptionConfig{
+	subConfig := pubsub.SubscriptionConfig{
 		Topic:               t,
 		RetainAckedMessages: ps.Spec.RetainAckedMessages,
 	}
@@ -285,7 +285,7 @@ func (r *Base) deleteSubscription(ctx context.Context, ps *v1.PullSubscription) 
 }
 
 func (r *Base) reconcileDataPlaneResources(ctx context.Context, ps *v1.PullSubscription, f ReconcileDataPlaneFunc) error {
-	loggingConfig, err := logging.LoggingConfigToJson(r.LoggingConfig)
+	loggingConfig, err := logging.ConfigToJSON(r.LoggingConfig)
 	if err != nil {
 		logging.FromContext(ctx).Desugar().Error("Error serializing existing logging config", zap.Error(err))
 	}
@@ -299,7 +299,7 @@ func (r *Base) reconcileDataPlaneResources(ctx context.Context, ps *v1.PullSubsc
 		r.MetricsConfig.Component = component
 	}
 
-	metricsConfig, err := metrics.MetricsOptionsToJson(r.MetricsConfig)
+	metricsConfig, err := metrics.OptionsToJSON(r.MetricsConfig)
 	if err != nil {
 		logging.FromContext(ctx).Desugar().Error("Error serializing metrics config", zap.Error(err))
 	}

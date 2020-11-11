@@ -13,7 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-source $(dirname "$0")/../vendor/knative.dev/test-infra/scripts/e2e-tests.sh
+source $(dirname "$0")/../vendor/knative.dev/hack/e2e-tests.sh
 
 source $(dirname "$0")/lib.sh
 
@@ -155,10 +155,6 @@ function gcp_auth_setup() {
   sed "s/K8S_SERVICE_ACCOUNT_NAME/${K8S_SERVICE_ACCOUNT_NAME}/g; s/PUBSUB-SERVICE-ACCOUNT/${DATA_PLANE_SERVICE_ACCOUNT_EMAIL}/g" ${CONFIG_GCP_AUTH} | ko apply -f -
 }
 
-# Create a cluster with Workload Identity enabled.
-# We could specify --version to force the cluster using a particular GKE version.
-initialize "$@" --enable-workload-identity=true
-
 if [ "${SKIP_TESTS:-}" == "true" ]; then
   echo "**************************************"
   echo "***         TESTS SKIPPED          ***"
@@ -166,7 +162,11 @@ if [ "${SKIP_TESTS:-}" == "true" ]; then
   exit 0
 fi
 
+# Create a cluster with Workload Identity enabled.
+# We could specify --version to force the cluster using a particular GKE version.
+initialize "$@" --enable-workload-identity=true
+
 # Channel related e2e tests we have in Eventing is not running here.
-go_test_e2e -timeout=30m -parallel=6 ./test/e2e -workloadIndentity=true -serviceAccountName="${K8S_SERVICE_ACCOUNT_NAME}" || fail_test
+go_test_e2e -timeout=30m -parallel=6 ./test/e2e -workloadIdentity=true -serviceAccountName="${K8S_SERVICE_ACCOUNT_NAME}" || fail_test
 
 success

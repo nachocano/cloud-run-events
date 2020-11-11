@@ -20,7 +20,6 @@ import (
 	"context"
 
 	"cloud.google.com/go/pubsub"
-	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
@@ -30,7 +29,7 @@ import (
 	eventingv1beta1 "knative.dev/eventing/pkg/apis/eventing/v1beta1"
 	"knative.dev/eventing/pkg/duck"
 	"knative.dev/pkg/client/injection/ducks/duck/v1/addressable"
-	"knative.dev/pkg/client/injection/ducks/duck/v1/conditions"
+	"knative.dev/pkg/client/injection/ducks/duck/v1/source"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	pkgcontroller "knative.dev/pkg/controller"
@@ -43,7 +42,6 @@ import (
 	brokerinformer "github.com/google/knative-gcp/pkg/client/injection/informers/broker/v1beta1/broker"
 	triggerinformer "github.com/google/knative-gcp/pkg/client/injection/informers/broker/v1beta1/trigger"
 	triggerreconciler "github.com/google/knative-gcp/pkg/client/injection/reconciler/broker/v1beta1/trigger"
-	metadataClient "github.com/google/knative-gcp/pkg/gclient/metadata"
 	"github.com/google/knative-gcp/pkg/reconciler"
 	"github.com/google/knative-gcp/pkg/utils"
 )
@@ -59,10 +57,6 @@ const (
 // filterBroker is the function to filter brokers with proper brokerclass.
 var filterBroker = pkgreconciler.AnnotationFilterFunc(eventingv1beta1.BrokerClassAnnotationKey, brokerv1beta1.BrokerClass, false /*allowUnset*/)
 
-type envConfig struct {
-	ProjectID string `envconfig:"PROJECT_ID"`
-}
-
 type Constructor injection.ControllerConstructor
 
 // NewConstructor creates a constructor to make a Trigger controller.
@@ -73,26 +67,22 @@ func NewConstructor(dataresidencyss *dataresidency.StoreSingleton) Constructor {
 }
 
 func newController(ctx context.Context, cmw configmap.Watcher, drs *dataresidency.Store) *controller.Impl {
-	var env envConfig
-	if err := envconfig.Process("", &env); err != nil {
-		logging.FromContext(ctx).Fatal("Failed to process env var", zap.Error(err))
-	}
-
 	triggerInformer := triggerinformer.Get(ctx)
 
+	var client *pubsub.Client
 	// If there is an error, the projectID will be empty. The reconciler will retry
 	// to get the projectID during reconciliation.
-	projectID, err := utils.ProjectID(env.ProjectID, metadataClient.NewDefaultMetadataClient())
+	projectID, err := utils.ProjectIDOrDefault("")
 	if err != nil {
 		logging.FromContext(ctx).Error("Failed to get project ID", zap.Error(err))
-	}
-
-	// Attempt to create a pubsub client for all worker threads to use. If this
-	// fails, pass a nil value to the Reconciler. They will attempt to
-	// create a client on reconcile.
-	client, err := newPubsubClient(ctx, projectID)
-	if err != nil {
-		logging.FromContext(ctx).Error("Failed to create controller-wide Pub/Sub client", zap.Error(err))
+	} else {
+		// Attempt to create a pubsub client for all worker threads to use. If this
+		// fails, pass a nil value to the Reconciler. They will attempt to
+		// create a client on reconcile.
+		if client, err = pubsub.NewClient(ctx, projectID); err != nil {
+			client = nil
+			logging.FromContext(ctx).Error("Failed to create controller-wide Pub/Sub client", zap.Error(err))
+		}
 	}
 
 	if client != nil {
@@ -110,7 +100,7 @@ func newController(ctx context.Context, cmw configmap.Watcher, drs *dataresidenc
 	}
 
 	impl := triggerreconciler.NewImpl(ctx, r, withAgentAndFinalizer)
-	r.kresourceTracker = duck.NewListableTracker(ctx, conditions.Get, impl.EnqueueKey, controller.GetTrackerLease(ctx))
+	r.sourceTracker = duck.NewListableTracker(ctx, source.Get, impl.EnqueueKey, controller.GetTrackerLease(ctx))
 	r.addressableTracker = duck.NewListableTracker(ctx, addressable.Get, impl.EnqueueKey, controller.GetTrackerLease(ctx))
 	r.uriResolver = resolver.NewURIResolver(ctx, impl.EnqueueKey)
 
@@ -139,19 +129,6 @@ func newController(ctx context.Context, cmw configmap.Watcher, drs *dataresidenc
 	)
 
 	return impl
-}
-
-func newPubsubClient(ctx context.Context, projectID string) (*pubsub.Client, error) {
-	projectID, err := utils.ProjectID(projectID, metadataClient.NewDefaultMetadataClient())
-	if err != nil {
-		return nil, err
-	}
-
-	client, err := pubsub.NewClient(ctx, projectID)
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
 }
 
 func withAgentAndFinalizer(impl *pkgcontroller.Impl) pkgcontroller.Options {

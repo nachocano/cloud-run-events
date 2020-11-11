@@ -33,7 +33,6 @@ import (
 
 	"github.com/google/knative-gcp/pkg/apis/configs/gcpauth"
 	duck "github.com/google/knative-gcp/pkg/duck/v1"
-	metadataClient "github.com/google/knative-gcp/pkg/gclient/metadata"
 	"github.com/google/knative-gcp/pkg/reconciler/identity/iam"
 	"github.com/google/knative-gcp/pkg/reconciler/identity/resources"
 	"github.com/google/knative-gcp/pkg/utils"
@@ -162,6 +161,18 @@ func (i *Identity) createServiceAccount(ctx context.Context, identityNames resou
 		}
 		logging.FromContext(ctx).Desugar().Error("Failed to get k8s service account", zap.Error(err))
 		return nil, fmt.Errorf("getting k8s service account failed with: %w", err)
+	} else if kServiceAccount.Annotations[resources.WorkloadIdentityKey] == "" {
+		// In case annotations never existed or was accidentally deleted.
+		if kServiceAccount.Annotations == nil {
+			kServiceAccount.Annotations = make(map[string]string)
+		}
+		kServiceAccount.Annotations[resources.WorkloadIdentityKey] = identityNames.GoogleServiceAccountName
+		kServiceAccount, err = i.kubeClient.CoreV1().ServiceAccounts(kServiceAccount.Namespace).Update(ctx, kServiceAccount, metav1.UpdateOptions{})
+		if err != nil {
+			logging.FromContext(ctx).Desugar().Error("Failed to update k8s service account", zap.Error(err))
+			return nil, fmt.Errorf("failed to update k8s service account: %w", err)
+		}
+		return kServiceAccount, nil
 	}
 	return kServiceAccount, nil
 }
@@ -169,7 +180,7 @@ func (i *Identity) createServiceAccount(ctx context.Context, identityNames resou
 // TODO he iam policy binding should be mocked so that we can unit test it. issue https://github.com/google/knative-gcp/issues/657
 // addIamPolicyBinding will add iam policy binding, which is related to a provided k8s ServiceAccount, to a GCP ServiceAccount.
 func (i *Identity) addIamPolicyBinding(ctx context.Context, projectID string, identityNames resources.IdentityNames) error {
-	projectID, err := utils.ProjectID(projectID, metadataClient.NewDefaultMetadataClient())
+	projectID, err := utils.ProjectIDOrDefault(projectID)
 	if err != nil {
 		return fmt.Errorf("failed to get project id: %w", err)
 	}
@@ -182,7 +193,7 @@ func (i *Identity) addIamPolicyBinding(ctx context.Context, projectID string, id
 
 // removeIamPolicyBinding will remove iam policy binding, which is related to a provided k8s ServiceAccount, from a GCP ServiceAccount.
 func (i *Identity) removeIamPolicyBinding(ctx context.Context, projectID string, identityNames resources.IdentityNames) error {
-	projectID, err := utils.ProjectID(projectID, metadataClient.NewDefaultMetadataClient())
+	projectID, err := utils.ProjectIDOrDefault(projectID)
 	if err != nil {
 		return fmt.Errorf("failed to get project id: %w", err)
 	}

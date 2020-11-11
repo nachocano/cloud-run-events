@@ -39,7 +39,6 @@ import (
 	"github.com/google/knative-gcp/pkg/apis/configs/dataresidency"
 	triggerreconciler "github.com/google/knative-gcp/pkg/client/injection/reconciler/broker/v1beta1/trigger"
 	brokerlisters "github.com/google/knative-gcp/pkg/client/listers/broker/v1beta1"
-	metadataClient "github.com/google/knative-gcp/pkg/gclient/metadata"
 	"github.com/google/knative-gcp/pkg/reconciler"
 	"github.com/google/knative-gcp/pkg/reconciler/broker/resources"
 	reconcilerutilspubsub "github.com/google/knative-gcp/pkg/reconciler/utils/pubsub"
@@ -71,8 +70,8 @@ type Reconciler struct {
 
 	brokerLister brokerlisters.BrokerLister
 
-	// Dynamic tracker to track KResources. It tracks the dependency between Triggers and Sources.
-	kresourceTracker duck.ListableTracker
+	// Dynamic tracker to track sources. It tracks the dependency between Triggers and Sources.
+	sourceTracker duck.ListableTracker
 
 	// Dynamic tracker to track AddressableTypes. It tracks Trigger subscribers.
 	addressableTracker duck.ListableTracker
@@ -109,7 +108,30 @@ func (r *Reconciler) ReconcileKind(ctx context.Context, t *brokerv1beta1.Trigger
 		// Call Finalizer anyway in case the Trigger still holds GCP Broker related resources.
 		// If a Trigger used to point to a GCP Broker but now has a Broker with a different brokerclass,
 		// we should clean up resources related to GCP Broker.
-		return r.FinalizeKind(ctx, t)
+		event := r.FinalizeKind(ctx, t)
+
+		// If a trigger has never pointed to a GCP broker, topic readiness shouldn't block this trigger's
+		// readiness. However, without a reliable way to tell if the trigger has previously pointed
+		// to a GCP broker FinalizeKind called above and other code could potentially change the topic
+		// readiness to UNKNOWN even when it has never pointed to a GCP broker. Always mark the topic ready
+		// here to unblock trigger readiness.
+		// This code can potentially cause problems in cases where the trigger did refer to a GCP
+		// broker which got deleted and recreated with a new non GCP broker. It's necessary to do best
+		// effort GC but the topic is going to be marked ready even when GC fails. This can result in
+		// dangling topic without matching status.
+		// This line should be deleted once the following TODO is finished.
+		// TODO(https://github.com/knative/pkg/issues/1149) Add a FilterKind to genreconciler so it will
+		// skip a trigger if it's not pointed to a gcp broker and doesn't have googlecloud finalizer string.
+		t.Status.MarkTopicReady()
+		var reconcilerEvent *pkgreconciler.ReconcilerEvent
+		switch {
+		case event == nil:
+			return nil
+		case pkgreconciler.EventAs(event, &reconcilerEvent):
+			return event
+		default:
+			return fmt.Errorf("Error won't be retried, please manually delete PubSub resources:: %w", event)
+		}
 	}
 
 	return r.reconcile(ctx, t, b)
@@ -191,7 +213,7 @@ func (r *Reconciler) reconcileRetryTopicAndSubscription(ctx context.Context, tri
 	logger.Debug("Reconciling retry topic")
 	// get ProjectID from metadata
 	//TODO get from context
-	projectID, err := utils.ProjectID(r.projectID, metadataClient.NewDefaultMetadataClient())
+	projectID, err := utils.ProjectIDOrDefault(r.projectID)
 	if err != nil {
 		logger.Error("Failed to find project id", zap.Error(err))
 		trig.Status.MarkTopicUnknown("ProjectIdNotFound", "Failed to find project id: %v", err)
@@ -202,16 +224,10 @@ func (r *Reconciler) reconcileRetryTopicAndSubscription(ctx context.Context, tri
 	//TODO uncomment when eventing webhook allows this
 	//trig.Status.ProjectID = projectID
 
-	client := r.pubsubClient
-	if client == nil {
-		client, err := pubsub.NewClient(ctx, projectID)
-		if err != nil {
-			logger.Error("Failed to create Pub/Sub client", zap.Error(err))
-			trig.Status.MarkTopicUnknown("PubSubClientCreationFailed", "Failed to create Pub/Sub client: %v", err)
-			trig.Status.MarkSubscriptionUnknown("PubSubClientCreationFailed", "Failed to create Pub/Sub client: %v", err)
-			return err
-		}
-		defer client.Close()
+	client, err := r.getClientOrCreateNew(ctx, projectID, trig)
+	if err != nil {
+		logger.Error("Failed to create Pub/Sub client", zap.Error(err))
+		return err
 	}
 
 	pubsubReconciler := reconcilerutilspubsub.NewReconciler(client, r.Recorder)
@@ -305,7 +321,7 @@ func (r *Reconciler) deleteRetryTopicAndSubscription(ctx context.Context, trig *
 
 	// get ProjectID from metadata
 	//TODO get from context
-	projectID, err := utils.ProjectID(r.projectID, metadataClient.NewDefaultMetadataClient())
+	projectID, err := utils.ProjectIDOrDefault(r.projectID)
 	if err != nil {
 		logger.Error("Failed to find project id", zap.Error(err))
 		trig.Status.MarkTopicUnknown("FinalizeTopicProjectIdNotFound", "Failed to find project id: %v", err)
@@ -313,16 +329,10 @@ func (r *Reconciler) deleteRetryTopicAndSubscription(ctx context.Context, trig *
 		return err
 	}
 
-	client := r.pubsubClient
-	if client == nil {
-		client, err := pubsub.NewClient(ctx, projectID)
-		if err != nil {
-			logger.Error("Failed to create Pub/Sub client", zap.Error(err))
-			trig.Status.MarkTopicUnknown("FinalizeTopicPubSubClientCreationFailed", "Failed to create Pub/Sub client: %v", err)
-			trig.Status.MarkSubscriptionUnknown("FinalizeSubscriptionPubSubClientCreationFailed", "Failed to create Pub/Sub client: %v", err)
-			return err
-		}
-		defer client.Close()
+	client, err := r.getClientOrCreateNew(ctx, projectID, trig)
+	if err != nil {
+		logger.Error("Failed to create Pub/Sub client", zap.Error(err))
+		return err
 	}
 	pubsubReconciler := reconcilerutilspubsub.NewReconciler(client, r.Recorder)
 
@@ -343,9 +353,9 @@ func (r *Reconciler) checkDependencyAnnotation(ctx context.Context, t *brokerv1b
 			t.Status.MarkDependencyFailed("ReferenceError", "Unable to unmarshal objectReference from dependency annotation of trigger: %v", err)
 			return fmt.Errorf("getting object ref from dependency annotation %q: %v", dependencyAnnotation, err)
 		}
-		trackKResource := r.kresourceTracker.TrackInNamespace(ctx, t)
+		trackSource := r.sourceTracker.TrackInNamespace(ctx, t)
 		// Trigger and its dependent source are in the same namespace, we already did the validation in the webhook.
-		if err := trackKResource(dependencyObjRef); err != nil {
+		if err := trackSource(dependencyObjRef); err != nil {
 			t.Status.MarkDependencyUnknown("TrackingError", "Unable to track dependency: %v", err)
 			return fmt.Errorf("tracking dependency: %v", err)
 		}
@@ -359,7 +369,7 @@ func (r *Reconciler) checkDependencyAnnotation(ctx context.Context, t *brokerv1b
 }
 
 func (r *Reconciler) propagateDependencyReadiness(ctx context.Context, t *brokerv1beta1.Trigger, dependencyObjRef corev1.ObjectReference) error {
-	lister, err := r.kresourceTracker.ListerFor(dependencyObjRef)
+	lister, err := r.sourceTracker.ListerFor(dependencyObjRef)
 	if err != nil {
 		t.Status.MarkDependencyUnknown("ListerDoesNotExist", "Failed to retrieve lister: %v", err)
 		return fmt.Errorf("retrieving lister: %v", err)
@@ -373,7 +383,7 @@ func (r *Reconciler) propagateDependencyReadiness(ctx context.Context, t *broker
 		}
 		return fmt.Errorf("getting the dependency: %v", err)
 	}
-	dependency := dependencyObj.(*duckv1.KResource)
+	dependency := dependencyObj.(*duckv1.Source)
 
 	// The dependency hasn't yet reconciled our latest changes to
 	// its desired state, so its conditions are outdated.
@@ -386,4 +396,24 @@ func (r *Reconciler) propagateDependencyReadiness(ctx context.Context, t *broker
 	}
 	t.Status.PropagateDependencyStatus(dependency)
 	return nil
+}
+
+// createPubsubClientFn is a function for pubsub client creation. Changed in testing only.
+var createPubsubClientFn reconcilerutilspubsub.CreateFn = pubsub.NewClient
+
+// getClientOrCreateNew Return the pubsubCient if it is valid, otherwise it tries to create a new client
+// and register it for later usage.
+func (r *Reconciler) getClientOrCreateNew(ctx context.Context, projectID string, trig *brokerv1beta1.Trigger) (*pubsub.Client, error) {
+	if r.pubsubClient != nil {
+		return r.pubsubClient, nil
+	}
+	client, err := createPubsubClientFn(ctx, projectID)
+	if err != nil {
+		trig.Status.MarkTopicUnknown("PubSubClientCreationFailed", "Failed to create Pub/Sub client: %v", err)
+		trig.Status.MarkSubscriptionUnknown("PubSubClientCreationFailed", "Failed to create Pub/Sub client: %v", err)
+		return nil, err
+	}
+	// Register the client for next run
+	r.pubsubClient = client
+	return client, nil
 }

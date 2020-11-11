@@ -35,6 +35,14 @@ func MakeIngressDeployment(args IngressArgs) *appsv1.Deployment {
 	container := containerTemplate(args.Args)
 	// Decorate the container template with ingress port.
 	container.Env = append(container.Env, corev1.EnvVar{Name: "PORT", Value: strconv.Itoa(args.Port)})
+
+	// TODO(#1804): remove this env variable when enabling the feature by default.
+	// Enable ingress filtering if necessary.
+	container.Env = append(container.Env, corev1.EnvVar{
+		Name:  "ENABLE_INGRESS_EVENT_FILTERING",
+		Value: strconv.FormatBool(args.EnableIngressFilter),
+	})
+
 	container.Ports = append(container.Ports, corev1.ContainerPort{Name: "http", ContainerPort: int32(args.Port)})
 	container.ReadinessProbe = &corev1.Probe{
 		Handler: corev1.Handler{
@@ -127,6 +135,12 @@ func MakeRetryDeployment(args RetryArgs) *appsv1.Deployment {
 
 // deploymentTemplate creates a template for data plane deployments.
 func deploymentTemplate(args Args, containers []corev1.Container) *appsv1.Deployment {
+	annotation := map[string]string{
+		"sidecar.istio.io/inject": strconv.FormatBool(args.AllowIstioSidecar),
+	}
+	if args.RolloutRestartTime != "" {
+		annotation[RolloutRestartTimeAnnotationKey] = args.RolloutRestartTime
+	}
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       args.BrokerCell.Namespace,
@@ -145,10 +159,8 @@ func deploymentTemplate(args Args, containers []corev1.Container) *appsv1.Deploy
 			MinReadySeconds: 60,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: Labels(args.BrokerCell.Name, args.ComponentName),
-					Annotations: map[string]string{
-						"sidecar.istio.io/inject": strconv.FormatBool(args.AllowIstioSidecar),
-					},
+					Labels:      Labels(args.BrokerCell.Name, args.ComponentName),
+					Annotations: annotation,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: args.ServiceAccountName,
